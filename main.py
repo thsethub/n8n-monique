@@ -1,156 +1,270 @@
 import os
 import logging
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set, Tuple
 
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse
 import httpx
 from unidecode import unidecode
 
+# --- Configuração do Logging ---
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Serviço de Pré‑processamento de Mensagens WhatsApp")
+# --- Configuração do FastAPI ---
+app = FastAPI(
+    title="Serviço de Análise e Preparação de Mensagens para IA",
+    description="Uma API que recebe uma mensagem, a classifica e prepara um payload otimizado para a IA."
+)
 
-VERIFY_TOKEN = os.getenv("VERIFY_TOKEN", "my_verify_token")
-N8N_WEBHOOK_URL = os.getenv("N8N_WEBHOOK_URL")
-
-def preprocess_text(text: str) -> str:
-    if text is None:
-        return ""
-    # 1. Remoção de espaços
-    processed = text.strip()
-    # 2. Conversão para minúsculas
-    processed = processed.lower()
-    # 3. Remoção de acentos
-    processed = unidecode(processed)
-    # 4. Remoção de pontuação (tudo o que não for palavra ou espaço)
-    processed = re.sub(r"[^\w\s]", "", processed)
-    # 5. Compactação de espaços múltiplos
-    processed = re.sub(r"\s+", " ", processed).strip()
-    return processed
-
-
-# @app.get("/health", response_class=PlainTextResponse)
-# async def health_check() -> str:
-#     """Endpoint de saúde para monitoramento.
-
-#     Retorna uma string simples indicando que o serviço está em execução.
-#     """
-#     return "OK"
+# --- Constantes de Configuração ---
+# Palavras-chave que indicam a necessidade de integrações ou ferramentas.
+# Usar um Set (conjunto) torna a busca por palavras muito mais rápida.
+PALAVRAS_CHAVE_DE_SISTEMA: Set[str] = {
+    # Documentos e arquivos
+    "documento", "document", "doc", "planilha", "spreadsheet", "sheet", "tabela",
+    "arquivo", "file", "pdf", "drive", "icloud", "armazenamento", "storage",
+    # Calendário e organização pessoal
+    "calendario", "agenda", "evento", "compromisso", "contatos", "contacts", "nota", "notes",
+    # Reuniões
+    "reuniao", "meeting", "encontro",
+    # Integrações e compartilhamento
+    "compartilhar", "share", "sincronizar", "sync", "integracao", "api", "oauth", "google", "apple",
+    # Financeiro
+    "boleto", "fatura", "cobranca", "pagamento"
+}
 
 
-# @app.get("/webhook", response_class=PlainTextResponse)
-# async def verify_webhook(request: Request) -> PlainTextResponse:
-#     """Endpoint de verificação do webhook.
+class AnalisadorDeMensagem:
 
-#     O WhatsApp envia uma requisição GET quando você registra o webhook. É
-#     necessário verificar se o modo (`hub.mode`) é 'subscribe' e se o
-#     `hub.verify_token` corresponde ao token definido. Caso positivo,
-#     retornamos `hub.challenge`; caso contrário, respondemos com erro 400.
-#     A lógica segue o exemplo da documentação oficial【282973114446148†L145-L160】.
-#     """
-#     params = request.query_params
-#     mode = params.get("hub.mode")
-#     verify_token = params.get("hub.verify_token")
-#     challenge = params.get("hub.challenge")
-#     if mode == "subscribe" and verify_token == VERIFY_TOKEN:
-#         if challenge:
-#             logger.info("Webhook verificado com sucesso.")
-#             return PlainTextResponse(content=challenge, status_code=200)
-#         else:
-#             raise HTTPException(status_code=400, detail="Missing challenge parameter.")
-#     logger.warning("Falha ao verificar webhook: modo=%s token=%s", mode, verify_token)
-#     raise HTTPException(status_code=400, detail="Verificação inválida.")
+    def __init__(self, payload_da_requisicao: Dict[str, Any]):
+
+        self.payload_original = payload_da_requisicao or {}
+        self.contexto = self.payload_original.get("ctx", {})
+
+    # --- Etapa 1: Orquestração Principal ---
+
+    def processar_mensagem(self) -> Dict[str, Any]:
+
+        # Passo 1: Extrair a mensagem do usuário do payload.
+        mensagem_usuario = self._extrair_mensagem_do_payload()
+
+        # Passo 2: Se não houver mensagem, retornar um erro padrão.
+        if not mensagem_usuario:
+            return self._construir_payload_de_erro_para_entrada_vazia()
+
+        # Passo 3: Limpar e padronizar o texto para análise.
+        texto_normalizado = self._normalizar_texto(mensagem_usuario)
+        
+        # Passo 4: Classificar a mensagem em uma categoria (bucket).
+        categoria, motivos = self._determinar_categoria_da_mensagem(mensagem_usuario, texto_normalizado)
+
+        # Passo 5: Montar o payload final para a IA com base na categoria.
+        payload_para_ia, integrações = self._construir_payload_para_ia(
+            categoria=categoria,
+            mensagem_original=mensagem_usuario,
+            texto_normalizado=texto_normalizado
+        )
+
+        # Passo 6: Construir e retornar a resposta final e completa.
+        return {
+            **self.payload_original,
+            "mensagem_completa": mensagem_usuario,
+            "texto_normalizado": texto_normalizado,
+            "openaiPayload": payload_para_ia,
+            "classification": {
+                "bucket": categoria,
+                "reasons": motivos,
+                "integrations": integrações,
+            },
+        }
+
+    # --- Etapa 2: Funções Auxiliares de Preparação ---
+
+    def _extrair_mensagem_do_payload(self) -> str:
+ 
+        mensagem = self.payload_original.get("message", "")
+        
+        # Garantimos que o valor seja uma string antes de remover espaços.
+        return str(mensagem).strip()
+
+    def _normalizar_texto(self, texto: str) -> str:
+
+        texto_minusculo = texto.lower()
+        texto_sem_acentos = unidecode(texto_minusculo)
+        return texto_sem_acentos
+
+    # --- Etapa 3: Funções de Análise e Classificação ---
+
+    def _determinar_categoria_da_mensagem(self, mensagem_original: str, texto_normalizado: str) -> Tuple[str, List[str]]:
+
+        # Prioridade 1: É um pedido que envolve sistemas/integrações?
+        palavras_encontradas = [
+            p for p in PALAVRAS_CHAVE_DE_SISTEMA 
+            if re.search(r'\b' + re.escape(p) + r'\b', texto_normalizado)
+        ]
+        if palavras_encontradas:
+            motivo = f"Palavras-chave de sistemas/APIs: {', '.join(palavras_encontradas[:6])}"
+            return "system", [motivo]
+
+        # Prioridade 2: É uma pergunta direta e objetiva?
+        if self._e_pergunta_direta_e_objetiva(mensagem_original):
+            return "messages", ["Pergunta direta/fechada detectada."]
+
+        # Prioridade 3: É uma mensagem complexa ou pessoal?
+        if self._e_mensagem_complexa_ou_pessoal(mensagem_original):
+            return "user", ["Mensagem com necessidade de personalização/contexto."]
+
+        # Se não se encaixar em nenhuma regra, decide pelo tamanho.
+        if len(mensagem_original) < 60:
+            return "messages", ["Curta e objetiva; sem necessidade clara de contexto."]
+        else:
+            return "user", ["Mensagem requer elaboração moderada."]
+
+    def _e_pergunta_direta_e_objetiva(self, texto: str) -> bool:
+
+        e_curta_e_termina_com_interrogacao = len(texto) <= 80 and texto.endswith("?")
+        
+        texto_sem_acentos = self._normalizar_texto(texto)
+        contem_termos_factuais = bool(re.search(
+            r"\b(que dia e hoje|data de hoje|quem descobriu|capital de|definicao de|quanto e|resultado de)\b",
+            texto_sem_acentos,
+            re.IGNORECASE
+        ))
+        
+        return e_curta_e_termina_com_interrogacao or contem_termos_factuais
+
+    def _e_mensagem_complexa_ou_pessoal(self, texto: str) -> bool:
+
+        e_longa = len(texto) > 160
+        usa_referencias_pessoais = bool(re.search(r"\b(meu|minha|minhas|meus|eu|para mim|no meu caso)\b", texto, re.IGNORECASE))
+        pede_um_plano_ou_estrategia = bool(re.search(r"\b(plano|passo a passo|organizar|estratégia|roteiro|currículo|proposta|estudo)\b", texto, re.IGNORECASE))
+        tem_multiplas_frases = len(re.findall(r"[.?!;]", texto)) > 1
+        
+        return e_longa or usa_referencias_pessoais or pede_um_plano_ou_estrategia or tem_multiplas_frases
+
+    # --- Etapa 4: Funções de Construção do Payload para a IA ---
+
+    def _construir_payload_para_ia(self, categoria: str, mensagem_original: str, texto_normalizado: str) -> Tuple[Dict[str, Any], List[str]]:
+
+        idioma = self.contexto.get("lang") or self._determinar_idioma(mensagem_original)
+        
+        prompts_de_sistema, integrações = self._criar_prompts_de_sistema(categoria, idioma, texto_normalizado)
+        historico_da_conversa = self._obter_historico_da_conversa()
+        
+        mensagens = prompts_de_sistema + historico_da_conversa + [{"role": "user", "content": mensagem_original}]
+        
+        parametros_dinamicos = self._calcular_parametros_da_ia(categoria)
+
+        payload_final = {
+            "model": self.contexto.get("model", "gpt-4.1-mini"),
+            "messages": mensagens,
+            **parametros_dinamicos, # Adiciona temperature e max_tokens
+        }
+        return payload_final, integrações
+    
+    def _criar_prompts_de_sistema(self, categoria: str, idioma: str, texto_normalizado: str) -> Tuple[List[Dict[str, str]], List[str]]:
+
+        prompts = []
+        integracoes_detectadas = []
+
+        # 1. Prompt de Idioma (sempre adicionado)
+        prompt_idioma = "Reply in English." if idioma == "en" else "Responda em português do Brasil."
+        prompts.append({"role": "system", "content": prompt_idioma})
+
+        # 2. Prompts Específicos da Categoria
+        if categoria == "system":
+            # Detecta quais integrações podem ser necessárias
+            if any(k in texto_normalizado for k in ["google", "drive", "docs", "sheet", "planilha", "calendar", "agenda"]): integracoes_detectadas.append("google")
+            if any(k in texto_normalizado for k in ["apple", "icloud", "notes"]): integracoes_detectadas.append("apple")
+            if any(k in texto_normalizado for k in ["boleto", "fatura", "cobranca"]): integracoes_detectadas.append("boleto")
+            
+            integracoes_str = ", ".join(integracoes_detectadas) or "nenhuma"
+            prompts.append({
+                "role": "system",
+                "content": f"MODO INTEGRAÇÃO ATIVO. A intenção do usuário parece ser usar ferramentas como calendário, documentos ou pagamentos. Antes de agir, sempre confirme os detalhes necessários. Informe que usaria as APIs ({integracoes_str}) e peça confirmação."
+            })
+        else: # Categoria 'user' ou 'messages'
+            prompts.append({
+                "role": "system",
+                "content": "Você é um assistente no WhatsApp, amigável e direto. Evite jargões. Se não souber algo, admita e sugira como verificar."
+            })
+            if categoria == "user":
+                prompts.append({
+                    "role": "system",
+                    "content": "INSTRUÇÃO ADICIONAL: A mensagem do usuário é complexa. Faça até 2 perguntas para entender melhor e estruture a resposta final em tópicos, se aplicável."
+                })
+            elif categoria == "messages":
+                prompts.append({
+                    "role": "system",
+                    "content": "INSTRUÇÃO ADICIONAL: A mensagem é uma pergunta direta. Responda de forma objetiva em 1 a 3 frases."
+                })
+        
+        return prompts, integracoes_detectadas
+
+    def _calcular_parametros_da_ia(self, categoria: str) -> Dict[str, Any]:
+
+        temp_base = float(self.contexto.get("temperature", 0.3))
+
+        if categoria == "messages":
+            # Para perguntas diretas, queremos respostas factuais e sem criatividade.
+            return {"temperature": min(temp_base, 0.2), "max_tokens": 400}
+        elif categoria == "system":
+            # Para integrações, queremos um comportamento previsível.
+            return {"temperature": min(temp_base, 0.3), "max_tokens": 900}
+        else: # user
+            # Para pedidos complexos, permitimos um pouco mais de criatividade.
+            return {"temperature": min(max(temp_base, 0.3), 0.6), "max_tokens": 900}
+
+    def _obter_historico_da_conversa(self) -> List[Dict[str, str]]:
+
+        historico = self.payload_original.get("history", [])
+        if not isinstance(historico, list):
+            return []
+        
+        # Filtra e formata o histórico para garantir que está correto
+        historico_valido = [
+            {"role": msg["role"], "content": msg["content"]}
+            for msg in historico
+            if isinstance(msg, dict) and "role" in msg and "content" in msg
+        ]
+        return historico_valido[-6:] # Retorna apenas as últimas 6 interações
+
+    def _determinar_idioma(self, texto: str) -> str:
+
+        tem_pt = (re.search(r"[ãõçáéíóúàêô]", texto, re.IGNORECASE) or
+                  re.search(r"\b(que|como|quando|onde|reuniao|calendario)\b", texto, re.IGNORECASE))
+        tem_en = re.search(r"\b(what|how|when|where|meeting|calendar)\b", texto, re.IGNORECASE)
+        
+        return "en" if tem_en and not tem_pt else "pt"
+
+    def _construir_payload_de_erro_para_entrada_vazia(self) -> Dict[str, Any]:
+
+        return {
+            **self.payload_original,
+            "error": "EMPTY_INPUT",
+            "openaiPayload": {
+                "messages": [
+                    {"role": "assistant", "content": "Não recebi sua mensagem. Pode reenviar, por favor?"}
+                ]
+            }
+        }
 
 
-async def forward_to_n8n(payload: Dict[str, Any]) -> None:
-    """Encaminha a mensagem pré‑processada para a URL configurada do n8n.
+# --- Endpoint da API ---
 
-    Se a variável de ambiente N8N_WEBHOOK_URL estiver definida, este método
-    envia uma requisição POST assíncrona contendo o payload fornecido. Caso
-    contrário, nenhuma ação é realizada. O uso de httpx permite que as
-    requisições sejam feitas de forma assíncrona dentro do FastAPI.
-    """
-    if not N8N_WEBHOOK_URL:
-        logger.info("N8N_WEBHOOK_URL não configurado; nenhuma mensagem encaminhada.")
-        return
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(N8N_WEBHOOK_URL, json=payload, timeout=10.0)
-            response.raise_for_status()
-            logger.info("Mensagem encaminhada para n8n com status %s", response.status_code)
-    except Exception as exc:
-        logger.error("Erro ao encaminhar mensagem para n8n: %s", exc)
+@app.post("/preprocess", summary="Processa e prepara uma mensagem para a IA")
+async def rota_de_preprocessamento(payload: Dict[str, Any]) -> JSONResponse:
 
-
-# @app.post("/webhook")
-# async def receive_message(request: Request) -> JSONResponse:
-#     """Recebe notificações de mensagens da API do WhatsApp e processa o conteúdo.
-
-#     **Atenção:** Este endpoint espera o payload no formato bruto enviado pela
-#     API do WhatsApp (objeto `entry -> changes -> value -> messages`). Se o
-#     seu fluxo n8n já estiver recebendo a notificação do WhatsApp e apenas
-#     encaminhar uma mensagem simples para o serviço, use o endpoint
-#     :func:`preprocess_from_n8n` abaixo.
-
-#     Para cada mensagem de texto (`type == 'text'`), o serviço extrai o campo
-#     `text.body`【306868418922723†L88-L99】, aplica `preprocess_text` e monta
-#     um dicionário com o número do remetente (`from`), o ID da mensagem, o
-#     timestamp, o texto original e o texto processado. Opcionalmente,
-#     encaminha o resultado para outro fluxo do n8n por meio de
-#     :func:`forward_to_n8n`.
-#     """
-#     try:
-#         body: Dict[str, Any] = await request.json()
-#     except Exception:
-#         raise HTTPException(status_code=400, detail="Payload inválido ou não JSON.")
-
-#     processed_messages: List[Dict[str, Any]] = []
-#     logger.debug("Payload recebido (webhook WhatsApp): %s", body)
-
-#     entries = body.get("entry") or []
-#     if not isinstance(entries, list):
-#         entries = []
-
-#     for entry in entries:
-#         for change in entry.get("changes", []) if isinstance(entry, dict) else []:
-#             value = change.get("value", {})
-#             for message in value.get("messages", []):
-#                 if message.get("type") != "text":
-#                     continue
-#                 text_obj = message.get("text", {})
-#                 original_text: Optional[str] = text_obj.get("body")
-#                 processed_text = preprocess_text(original_text)
-#                 result = {
-#                     "from": message.get("from"),
-#                     "id": message.get("id"),
-#                     "timestamp": message.get("timestamp"),
-#                     "original": original_text,
-#                     "processed": processed_text,
-#                 }
-#                 processed_messages.append(result)
-#                 await forward_to_n8n(result)
-
-#     return JSONResponse(
-#         content={"status": "received", "processed_messages": processed_messages},
-#         status_code=200,
-#     )
-
-
-@app.post("/preprocess")
-async def preprocess_from_n8n(payload: Dict[str, Any]) -> JSONResponse:
-
-    original = payload.get("message") or payload.get("text") or payload.get("body")
-    if original is None:
-        raise HTTPException(status_code=400, detail="Campo 'message' obrigatório.")
-    processed = preprocess_text(original)
-    result = {
-        "from": payload.get("from"),
-        "original": original,
-        "processed": processed,
-    }
-    # Encaminha o resultado para outro fluxo, se configurado
-    await forward_to_n8n(result)
-    return JSONResponse(result)
+    if not payload:
+        raise HTTPException(status_code=400, detail="O payload não pode ser vazio.")
+        
+    # 1. Cria o Analisador (O "Gerente") para cuidar do pedido.
+    analisador = AnalisadorDeMensagem(payload)
+    
+    # 2. Pede para o Analisador processar a mensagem e preparar o resultado.
+    resultado_final = analisador.processar_mensagem()
+    
+    # 3. Retorna o resultado completo para o n8n.
+    return JSONResponse(content=resultado_final)
