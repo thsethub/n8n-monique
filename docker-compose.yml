@@ -1,0 +1,21 @@
+# docker-compose.yml CORRIGIDO
+
+version: '3.8'
+
+services:
+  preproc-api:
+    image: thsethub/preproc-api:latest
+    
+    container_name: preproc-api
+    
+    ports:
+      - "8181:8181"
+      
+    restart: unless-stopped
+    
+    networks:
+      - supabase_default
+
+networks:
+  supabase_default:
+    external: true
