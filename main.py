@@ -1,3 +1,14 @@
+"""
+Microsserviço de Pré-processamento para IA
+
+Este módulo implementa um serviço de análise e preparação de mensagens para modelos de IA.
+Ele classifica mensagens em categorias (buckets), detecta necessidades de integração com 
+APIs externas e otimiza prompts baseado no contexto da mensagem.
+
+Autor: thsethub
+Data: 2024
+"""
+
 import os
 import logging
 import re
@@ -15,7 +26,10 @@ logger = logging.getLogger(__name__)
 # --- Configuração do FastAPI ---
 app = FastAPI(
     title="Serviço de Análise e Preparação de Mensagens para IA",
-    description="Uma API que recebe uma mensagem, a classifica e prepara um payload otimizado para a IA."
+    description="Uma API que recebe uma mensagem, a classifica e prepara um payload otimizado para a IA.",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc"
 )
 
 # --- Constantes de Configuração ---
@@ -37,15 +51,50 @@ PALAVRAS_CHAVE_DE_SISTEMA: Set[str] = {
 
 
 class AnalisadorDeMensagem:
+    """
+    Classe principal responsável pela análise e processamento de mensagens.
+    
+    Esta classe implementa a lógica de classificação de mensagens em buckets
+    (system, messages, user), detecta necessidades de integrações e prepara
+    payloads otimizados para modelos de IA.
+    
+    Attributes:
+        payload_original (Dict[str, Any]): Payload completo recebido na requisição
+        contexto (Dict[str, Any]): Contexto extraído do payload para configurações
+    """
 
     def __init__(self, payload_da_requisicao: Dict[str, Any]):
-
+        """
+        Inicializa o analisador com o payload da requisição.
+        
+        Args:
+            payload_da_requisicao: Dicionário contendo a mensagem e contexto
+        """
         self.payload_original = payload_da_requisicao or {}
         self.contexto = self.payload_original.get("ctx", {})
 
     # --- Etapa 1: Orquestração Principal ---
 
     def processar_mensagem(self) -> Dict[str, Any]:
+        """
+        Método principal que orquestra todo o processamento da mensagem.
+        
+        Executa o fluxo completo de análise:
+        1. Extrai mensagem do payload
+        2. Normaliza o texto
+        3. Classifica em bucket (system/messages/user)
+        4. Detecta integrações necessárias
+        5. Constrói payload otimizado para IA
+        
+        Returns:
+            Dict contendo a mensagem processada, classificação e payload para IA
+            
+        Example:
+            >>> analisador = AnalisadorDeMensagem({"message": "Qual a capital do Brasil?"})
+            >>> resultado = analisador.processar_mensagem()
+            >>> print(resultado["classification"]["bucket"])
+            "messages"
+        """
 
         # Passo 1: Extrair a mensagem do usuário do payload.
         mensagem_usuario = self._extrair_mensagem_do_payload()
@@ -83,6 +132,12 @@ class AnalisadorDeMensagem:
     # --- Etapa 2: Funções Auxiliares de Preparação ---
 
     def _extrair_mensagem_do_payload(self) -> str:
+        """
+        Extrai e limpa a mensagem do payload original.
+        
+        Returns:
+            string: Mensagem do usuário limpa e sem espaços extras
+        """
  
         mensagem = self.payload_original.get("message", "")
         
@@ -90,6 +145,19 @@ class AnalisadorDeMensagem:
         return str(mensagem).strip()
 
     def _normalizar_texto(self, texto: str) -> str:
+        """
+        Normaliza texto para análise removendo acentos e convertendo para minúsculas.
+        
+        Args:
+            texto: Texto a ser normalizado
+            
+        Returns:
+            string: Texto normalizado sem acentos e em minúsculas
+            
+        Example:
+            >>> self._normalizar_texto("Reunião às 15h")
+            "reuniao as 15h"
+        """
 
         texto_minusculo = texto.lower()
         texto_sem_acentos = unidecode(texto_minusculo)
@@ -98,6 +166,25 @@ class AnalisadorDeMensagem:
     # --- Etapa 3: Funções de Análise e Classificação ---
 
     def _determinar_categoria_da_mensagem(self, mensagem_original: str, texto_normalizado: str) -> Tuple[str, List[str]]:
+        """
+        Classifica a mensagem em um dos três buckets baseado no conteúdo.
+        
+        Buckets:
+        - "system": Mensagens que requerem integrações/APIs externas
+        - "messages": Perguntas diretas e objetivas
+        - "user": Mensagens complexas que precisam de personalização
+        
+        Args:
+            mensagem_original: Texto original da mensagem
+            texto_normalizado: Texto normalizado para análise
+            
+        Returns:
+            Tuple[str, List[str]]: (bucket, lista de motivos da classificação)
+            
+        Example:
+            >>> self._determinar_categoria_da_mensagem("Agende reunião no google", "agende reuniao no google")
+            ("system", ["Palavras-chave de sistemas/APIs: google, reuniao"])
+        """
 
         # Prioridade 1: É um pedido que envolve sistemas/integrações?
         palavras_encontradas = [
@@ -123,6 +210,23 @@ class AnalisadorDeMensagem:
             return "user", ["Mensagem requer elaboração moderada."]
 
     def _e_pergunta_direta_e_objetiva(self, texto: str) -> bool:
+        """
+        Identifica se uma mensagem é uma pergunta direta que requer resposta factual.
+        
+        Critérios:
+        - Mensagem curta (≤ 80 chars) terminada com "?"
+        - Contém termos factuais como "que dia e hoje", "capital de", etc.
+        
+        Args:
+            texto: Texto da mensagem a ser analisada
+            
+        Returns:
+            bool: True se for pergunta direta, False caso contrário
+            
+        Example:
+            >>> self._e_pergunta_direta_e_objetiva("Qual a capital do Brasil?")
+            True
+        """
 
         e_curta_e_termina_com_interrogacao = len(texto) <= 80 and texto.endswith("?")
         
@@ -136,6 +240,25 @@ class AnalisadorDeMensagem:
         return e_curta_e_termina_com_interrogacao or contem_termos_factuais
 
     def _e_mensagem_complexa_ou_pessoal(self, texto: str) -> bool:
+        """
+        Identifica mensagens que requerem personalização ou contexto específico.
+        
+        Critérios:
+        - Mensagem longa (> 160 chars)
+        - Referências pessoais ("meu", "minha", "eu")
+        - Pedidos de planejamento ("plano", "estratégia")
+        - Múltiplas frases
+        
+        Args:
+            texto: Texto da mensagem a ser analisada
+            
+        Returns:
+            bool: True se for mensagem complexa/pessoal, False caso contrário
+            
+        Example:
+            >>> self._e_mensagem_complexa_ou_pessoal("Preciso de um plano para organizar minha rotina")
+            True
+        """
 
         e_longa = len(texto) > 160
         usa_referencias_pessoais = bool(re.search(r"\b(meu|minha|minhas|meus|eu|para mim|no meu caso)\b", texto, re.IGNORECASE))
@@ -147,6 +270,25 @@ class AnalisadorDeMensagem:
     # --- Etapa 4: Funções de Construção do Payload para a IA ---
 
     def _construir_payload_para_ia(self, categoria: str, mensagem_original: str, texto_normalizado: str) -> Tuple[Dict[str, Any], List[str]]:
+        """
+        Constrói o payload otimizado para envio ao modelo de IA.
+        
+        Monta as mensagens de sistema, histórico e parâmetros dinâmicos
+        baseado na categoria identificada.
+        
+        Args:
+            categoria: Bucket da mensagem (system/messages/user)
+            mensagem_original: Texto original da mensagem
+            texto_normalizado: Texto normalizado para detecção
+            
+        Returns:
+            Tuple[Dict, List]: (payload_para_ia, lista_de_integrações)
+            
+        Example:
+            >>> payload, integracoes = self._construir_payload_para_ia("system", "Agende reunião", "agende reuniao")
+            >>> print(payload["temperature"])
+            0.3
+        """
 
         idioma = self.contexto.get("lang") or self._determinar_idioma(mensagem_original)
         
@@ -165,6 +307,25 @@ class AnalisadorDeMensagem:
         return payload_final, integrações
     
     def _criar_prompts_de_sistema(self, categoria: str, idioma: str, texto_normalizado: str) -> Tuple[List[Dict[str, str]], List[str]]:
+        """
+        Cria prompts de sistema personalizados baseado na categoria e idioma.
+        
+        Para cada categoria, gera prompts específicos que orientam o comportamento
+        da IA e detecta integrações necessárias baseado em palavras-chave.
+        
+        Args:
+            categoria: Bucket da mensagem (system/messages/user)
+            idioma: Idioma identificado ("pt" ou "en")
+            texto_normalizado: Texto para detecção de integrações
+            
+        Returns:
+            Tuple[List[Dict], List[str]]: (lista_de_prompts, integrações_detectadas)
+            
+        Example:
+            >>> prompts, integracoes = self._criar_prompts_de_sistema("system", "pt", "google calendar")
+            >>> print(integracoes)
+            ["google"]
+        """
 
         prompts = []
         integracoes_detectadas = []
@@ -204,6 +365,25 @@ class AnalisadorDeMensagem:
         return prompts, integracoes_detectadas
 
     def _calcular_parametros_da_ia(self, categoria: str) -> Dict[str, Any]:
+        """
+        Calcula parâmetros dinâmicos da IA baseado na categoria da mensagem.
+        
+        Ajusta temperature e max_tokens para otimizar o comportamento da IA:
+        - messages: Baixa criatividade, respostas factuais
+        - system: Comportamento previsível para integrações
+        - user: Permite criatividade moderada
+        
+        Args:
+            categoria: Bucket da mensagem (system/messages/user)
+            
+        Returns:
+            Dict[str, Any]: Dicionário com temperature e max_tokens
+            
+        Example:
+            >>> params = self._calcular_parametros_da_ia("messages")
+            >>> print(params["temperature"])
+            0.2
+        """
 
         temp_base = float(self.contexto.get("temperature", 0.3))
 
@@ -218,6 +398,20 @@ class AnalisadorDeMensagem:
             return {"temperature": min(max(temp_base, 0.3), 0.6), "max_tokens": 900}
 
     def _obter_historico_da_conversa(self) -> List[Dict[str, str]]:
+        """
+        Extrai e valida o histórico da conversa do payload.
+        
+        Filtra mensagens inválidas e retorna apenas as últimas 6 interações
+        para manter o contexto sem sobrecarregar o modelo.
+        
+        Returns:
+            List[Dict[str, str]]: Lista de mensagens válidas do histórico
+            
+        Example:
+            >>> historico = self._obter_historico_da_conversa()
+            >>> print(len(historico))  # máximo 6
+            3
+        """
 
         historico = self.payload_original.get("history", [])
         if not isinstance(historico, list):
@@ -232,6 +426,22 @@ class AnalisadorDeMensagem:
         return historico_valido[-6:] # Retorna apenas as últimas 6 interações
 
     def _determinar_idioma(self, texto: str) -> str:
+        """
+        Detecta automaticamente o idioma da mensagem.
+        
+        Analisa caracteres especiais e palavras-chave para identificar
+        se a mensagem está em português ou inglês.
+        
+        Args:
+            texto: Texto para análise de idioma
+            
+        Returns:
+            str: "pt" para português, "en" para inglês
+            
+        Example:
+            >>> self._determinar_idioma("Como está o tempo hoje?")
+            "pt"
+        """
 
         tem_pt = (re.search(r"[ãõçáéíóúàêô]", texto, re.IGNORECASE) or
                   re.search(r"\b(que|como|quando|onde|reuniao|calendario)\b", texto, re.IGNORECASE))
@@ -240,6 +450,12 @@ class AnalisadorDeMensagem:
         return "en" if tem_en and not tem_pt else "pt"
 
     def _construir_payload_de_erro_para_entrada_vazia(self) -> Dict[str, Any]:
+        """
+        Constrói resposta padrão para casos de entrada vazia.
+        
+        Returns:
+            Dict[str, Any]: Payload com erro formatado para entrada vazia
+        """
 
         return {
             **self.payload_original,
@@ -256,6 +472,45 @@ class AnalisadorDeMensagem:
 
 @app.post("/preprocess", summary="Processa e prepara uma mensagem para a IA")
 async def rota_de_preprocessamento(payload: Dict[str, Any]) -> JSONResponse:
+    """
+    Endpoint principal para processamento de mensagens.
+    
+    Recebe uma mensagem do usuário, classifica em buckets, detecta integrações
+    necessárias e retorna um payload otimizado para modelos de IA.
+    
+    Args:
+        payload: Dicionário contendo:
+            - message (str): Mensagem do usuário (obrigatório)
+            - ctx (dict, opcional): Contexto com configurações
+            - history (list, opcional): Histórico da conversa
+    
+    Returns:
+        JSONResponse: Resposta estruturada com classificação e payload para IA
+        
+    Raises:
+        HTTPException: 400 se o payload estiver vazio
+        
+    Example:
+        Request:
+        ```json
+        {
+            "message": "Agende uma reunião no google calendar",
+            "ctx": {"lang": "pt"}
+        }
+        ```
+        
+        Response:
+        ```json
+        {
+            "classification": {
+                "bucket": "system",
+                "reasons": ["Palavras-chave de sistemas/APIs: google, reuniao"],
+                "integrations": ["google"]
+            },
+            "openaiPayload": {...}
+        }
+        ```
+    """
 
     if not payload:
         raise HTTPException(status_code=400, detail="O payload não pode ser vazio.")
