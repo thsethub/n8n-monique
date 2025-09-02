@@ -1,21 +1,31 @@
-import os
 import logging
 import re
-from typing import Any, Dict, List, Optional, Set, Tuple
+import logging
+import re
+from typing import Any, Dict, List, Set, Tuple
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
-import httpx
 from unidecode import unidecode
+from python_json_logger import jsonlogger
 
-# --- Configuração do Logging ---
-logging.basicConfig(level=logging.INFO)
+# --- Configuração do Logging Estruturado ---
+# Remove qualquer configuração de logger existente para evitar duplicação
+for handler in logging.root.handlers[:]:
+    logging.root.removeHandler(handler)
+
+# Configura o logger para emitir logs em formato JSON
+logHandler = logging.StreamHandler()
+# Adiciona campos padrão que o Grafana Loki/ELK entendem bem
+formatter = jsonlogger.JsonFormatter("%(asctime)s %(name)s %(levelname)s %(message)s")
+logHandler.setFormatter(formatter)
+logging.basicConfig(level=logging.INFO, handlers=[logHandler])
 logger = logging.getLogger(__name__)
 
 # --- Configuração do FastAPI ---
 app = FastAPI(
     title="Serviço de Análise e Preparação de Mensagens para IA",
-    description="Uma API que recebe uma mensagem, a classifica e prepara um payload otimizado para a IA."
+    description="Uma API que recebe uma mensagem, a classifica e prepara um payload otimizado para a IA.",
 )
 
 # --- Constantes de Configuração ---
@@ -23,16 +33,48 @@ app = FastAPI(
 # Usar um Set (conjunto) torna a busca por palavras muito mais rápida.
 PALAVRAS_CHAVE_DE_SISTEMA: Set[str] = {
     # Documentos e arquivos
-    "documento", "document", "doc", "planilha", "spreadsheet", "sheet", "tabela",
-    "arquivo", "file", "pdf", "drive", "icloud", "armazenamento", "storage",
+    "documento",
+    "document",
+    "doc",
+    "planilha",
+    "spreadsheet",
+    "sheet",
+    "tabela",
+    "arquivo",
+    "file",
+    "pdf",
+    "drive",
+    "icloud",
+    "armazenamento",
+    "storage",
     # Calendário e organização pessoal
-    "calendario", "agenda", "evento", "compromisso", "contatos", "contacts", "nota", "notes",
+    "calendario",
+    "agenda",
+    "evento",
+    "compromisso",
+    "contatos",
+    "contacts",
+    "nota",
+    "notes",
     # Reuniões
-    "reuniao", "meeting", "encontro",
+    "reuniao",
+    "meeting",
+    "encontro",
     # Integrações e compartilhamento
-    "compartilhar", "share", "sincronizar", "sync", "integracao", "api", "oauth", "google", "apple",
+    "compartilhar",
+    "share",
+    "sincronizar",
+    "sync",
+    "integracao",
+    "api",
+    "oauth",
+    "google",
+    "apple",
     # Financeiro
-    "boleto", "fatura", "cobranca", "pagamento"
+    "boleto",
+    "fatura",
+    "cobranca",
+    "pagamento",
 }
 
 
@@ -56,19 +98,21 @@ class AnalisadorDeMensagem:
 
         # Passo 3: Limpar e padronizar o texto para análise.
         texto_normalizado = self._normalizar_texto(mensagem_usuario)
-        
+
         # Passo 4: Classificar a mensagem em uma categoria (bucket).
-        categoria, motivos = self._determinar_categoria_da_mensagem(mensagem_usuario, texto_normalizado)
+        categoria, motivos = self._determinar_categoria_da_mensagem(
+            mensagem_usuario, texto_normalizado
+        )
 
         # Passo 5: Montar o payload final para a IA com base na categoria.
         payload_para_ia, integrações = self._construir_payload_para_ia(
             categoria=categoria,
             mensagem_original=mensagem_usuario,
-            texto_normalizado=texto_normalizado
+            texto_normalizado=texto_normalizado,
         )
 
         # Passo 6: Construir e retornar a resposta final e completa.
-        return {
+        resposta_final = {
             **self.payload_original,
             "mensagem_completa": mensagem_usuario,
             "texto_normalizado": texto_normalizado,
@@ -80,12 +124,25 @@ class AnalisadorDeMensagem:
             },
         }
 
+        logger.info(
+            "Mensagem processada com sucesso",
+            extra={
+                "log_type": "preprocessing_result",
+                "classification_bucket": categoria,
+                "integrations_found": integrações,
+                "original_message_length": len(mensagem_usuario),
+                "model_used": payload_para_ia.get("model"),
+            },
+        )
+
+        return resposta_final
+
     # --- Etapa 2: Funções Auxiliares de Preparação ---
 
     def _extrair_mensagem_do_payload(self) -> str:
- 
+
         mensagem = self.payload_original.get("message", "")
-        
+
         # Garantimos que o valor seja uma string antes de remover espaços.
         return str(mensagem).strip()
 
@@ -97,12 +154,15 @@ class AnalisadorDeMensagem:
 
     # --- Etapa 3: Funções de Análise e Classificação ---
 
-    def _determinar_categoria_da_mensagem(self, mensagem_original: str, texto_normalizado: str) -> Tuple[str, List[str]]:
+    def _determinar_categoria_da_mensagem(
+        self, mensagem_original: str, texto_normalizado: str
+    ) -> Tuple[str, List[str]]:
 
         # Prioridade 1: É um pedido que envolve sistemas/integrações?
         palavras_encontradas = [
-            p for p in PALAVRAS_CHAVE_DE_SISTEMA 
-            if re.search(r'\b' + re.escape(p) + r'\b', texto_normalizado)
+            p
+            for p in PALAVRAS_CHAVE_DE_SISTEMA
+            if re.search(r"\b" + re.escape(p) + r"\b", texto_normalizado)
         ]
         if palavras_encontradas:
             motivo = f"Palavras-chave de sistemas/APIs: {', '.join(palavras_encontradas[:6])}"
@@ -125,82 +185,137 @@ class AnalisadorDeMensagem:
     def _e_pergunta_direta_e_objetiva(self, texto: str) -> bool:
 
         e_curta_e_termina_com_interrogacao = len(texto) <= 80 and texto.endswith("?")
-        
+
         texto_sem_acentos = self._normalizar_texto(texto)
-        contem_termos_factuais = bool(re.search(
-            r"\b(que dia e hoje|data de hoje|quem descobriu|capital de|definicao de|quanto e|resultado de)\b",
-            texto_sem_acentos,
-            re.IGNORECASE
-        ))
-        
+        contem_termos_factuais = bool(
+            re.search(
+                r"\b(que dia e hoje|data de hoje|quem descobriu|capital de|definicao de|quanto e|resultado de)\b",
+                texto_sem_acentos,
+                re.IGNORECASE,
+            )
+        )
+
         return e_curta_e_termina_com_interrogacao or contem_termos_factuais
 
     def _e_mensagem_complexa_ou_pessoal(self, texto: str) -> bool:
 
         e_longa = len(texto) > 160
-        usa_referencias_pessoais = bool(re.search(r"\b(meu|minha|minhas|meus|eu|para mim|no meu caso)\b", texto, re.IGNORECASE))
-        pede_um_plano_ou_estrategia = bool(re.search(r"\b(plano|passo a passo|organizar|estratégia|roteiro|currículo|proposta|estudo)\b", texto, re.IGNORECASE))
+        usa_referencias_pessoais = bool(
+            re.search(
+                r"\b(meu|minha|minhas|meus|eu|para mim|no meu caso)\b",
+                texto,
+                re.IGNORECASE,
+            )
+        )
+        pede_um_plano_ou_estrategia = bool(
+            re.search(
+                r"\b(plano|passo a passo|organizar|estratégia|roteiro|currículo|proposta|estudo)\b",
+                texto,
+                re.IGNORECASE,
+            )
+        )
         tem_multiplas_frases = len(re.findall(r"[.?!;]", texto)) > 1
-        
-        return e_longa or usa_referencias_pessoais or pede_um_plano_ou_estrategia or tem_multiplas_frases
+
+        return (
+            e_longa
+            or usa_referencias_pessoais
+            or pede_um_plano_ou_estrategia
+            or tem_multiplas_frases
+        )
 
     # --- Etapa 4: Funções de Construção do Payload para a IA ---
 
-    def _construir_payload_para_ia(self, categoria: str, mensagem_original: str, texto_normalizado: str) -> Tuple[Dict[str, Any], List[str]]:
+    def _construir_payload_para_ia(
+        self, categoria: str, mensagem_original: str, texto_normalizado: str
+    ) -> Tuple[Dict[str, Any], List[str]]:
 
         idioma = self.contexto.get("lang") or self._determinar_idioma(mensagem_original)
-        
-        prompts_de_sistema, integrações = self._criar_prompts_de_sistema(categoria, idioma, texto_normalizado)
+
+        prompts_de_sistema, integrações = self._criar_prompts_de_sistema(
+            categoria, idioma, texto_normalizado
+        )
         historico_da_conversa = self._obter_historico_da_conversa()
-        
-        mensagens = prompts_de_sistema + historico_da_conversa + [{"role": "user", "content": mensagem_original}]
-        
+
+        mensagens = (
+            prompts_de_sistema
+            + historico_da_conversa
+            + [{"role": "user", "content": mensagem_original}]
+        )
+
         parametros_dinamicos = self._calcular_parametros_da_ia(categoria)
 
         payload_final = {
             "model": self.contexto.get("model", "gpt-4.1-mini"),
             "messages": mensagens,
-            **parametros_dinamicos, # Adiciona temperature e max_tokens
+            **parametros_dinamicos,  # Adiciona temperature e max_tokens
         }
         return payload_final, integrações
-    
-    def _criar_prompts_de_sistema(self, categoria: str, idioma: str, texto_normalizado: str) -> Tuple[List[Dict[str, str]], List[str]]:
+
+    def _criar_prompts_de_sistema(
+        self, categoria: str, idioma: str, texto_normalizado: str
+    ) -> Tuple[List[Dict[str, str]], List[str]]:
 
         prompts = []
         integracoes_detectadas = []
 
         # 1. Prompt de Idioma (sempre adicionado)
-        prompt_idioma = "Reply in English." if idioma == "en" else "Responda em português do Brasil."
+        prompt_idioma = (
+            "Reply in English."
+            if idioma == "en"
+            else "Responda em português do Brasil."
+        )
         prompts.append({"role": "system", "content": prompt_idioma})
 
         # 2. Prompts Específicos da Categoria
         if categoria == "system":
             # Detecta quais integrações podem ser necessárias
-            if any(k in texto_normalizado for k in ["google", "drive", "docs", "sheet", "planilha", "calendar", "agenda"]): integracoes_detectadas.append("google")
-            if any(k in texto_normalizado for k in ["apple", "icloud", "notes"]): integracoes_detectadas.append("apple")
-            if any(k in texto_normalizado for k in ["boleto", "fatura", "cobranca"]): integracoes_detectadas.append("boleto")
-            
+            if any(
+                k in texto_normalizado
+                for k in [
+                    "google",
+                    "drive",
+                    "docs",
+                    "sheet",
+                    "planilha",
+                    "calendar",
+                    "agenda",
+                ]
+            ):
+                integracoes_detectadas.append("google")
+            if any(k in texto_normalizado for k in ["apple", "icloud", "notes"]):
+                integracoes_detectadas.append("apple")
+            if any(k in texto_normalizado for k in ["boleto", "fatura", "cobranca"]):
+                integracoes_detectadas.append("boleto")
+
             integracoes_str = ", ".join(integracoes_detectadas) or "nenhuma"
-            prompts.append({
-                "role": "system",
-                "content": f"MODO INTEGRAÇÃO ATIVO. A intenção do usuário parece ser usar ferramentas como calendário, documentos ou pagamentos. Antes de agir, sempre confirme os detalhes necessários. Informe que usaria as APIs ({integracoes_str}) e peça confirmação."
-            })
-        else: # Categoria 'user' ou 'messages'
-            prompts.append({
-                "role": "system",
-                "content": "Você é um assistente no WhatsApp, amigável e direto. Evite jargões. Se não souber algo, admita e sugira como verificar."
-            })
+            prompts.append(
+                {
+                    "role": "system",
+                    "content": f"MODO INTEGRAÇÃO ATIVO. A intenção do usuário parece ser usar ferramentas como calendário, documentos ou pagamentos. Antes de agir, sempre confirme os detalhes necessários. Informe que usaria as APIs ({integracoes_str}) e peça confirmação.",
+                }
+            )
+        else:  # Categoria 'user' ou 'messages'
+            prompts.append(
+                {
+                    "role": "system",
+                    "content": "Você é um assistente no WhatsApp, amigável e direto. Evite jargões. Se não souber algo, admita e sugira como verificar.",
+                }
+            )
             if categoria == "user":
-                prompts.append({
-                    "role": "system",
-                    "content": "INSTRUÇÃO ADICIONAL: A mensagem do usuário é complexa. Faça até 2 perguntas para entender melhor e estruture a resposta final em tópicos, se aplicável."
-                })
+                prompts.append(
+                    {
+                        "role": "system",
+                        "content": "INSTRUÇÃO ADICIONAL: A mensagem do usuário é complexa. Faça até 2 perguntas para entender melhor e estruture a resposta final em tópicos, se aplicável.",
+                    }
+                )
             elif categoria == "messages":
-                prompts.append({
-                    "role": "system",
-                    "content": "INSTRUÇÃO ADICIONAL: A mensagem é uma pergunta direta. Responda de forma objetiva em 1 a 3 frases."
-                })
-        
+                prompts.append(
+                    {
+                        "role": "system",
+                        "content": "INSTRUÇÃO ADICIONAL: A mensagem é uma pergunta direta. Responda de forma objetiva em 1 a 3 frases.",
+                    }
+                )
+
         return prompts, integracoes_detectadas
 
     def _calcular_parametros_da_ia(self, categoria: str) -> Dict[str, Any]:
@@ -213,7 +328,7 @@ class AnalisadorDeMensagem:
         elif categoria == "system":
             # Para integrações, queremos um comportamento previsível.
             return {"temperature": min(temp_base, 0.3), "max_tokens": 900}
-        else: # user
+        else:  # user
             # Para pedidos complexos, permitimos um pouco mais de criatividade.
             return {"temperature": min(max(temp_base, 0.3), 0.6), "max_tokens": 900}
 
@@ -222,21 +337,24 @@ class AnalisadorDeMensagem:
         historico = self.payload_original.get("history", [])
         if not isinstance(historico, list):
             return []
-        
+
         # Filtra e formata o histórico para garantir que está correto
         historico_valido = [
             {"role": msg["role"], "content": msg["content"]}
             for msg in historico
             if isinstance(msg, dict) and "role" in msg and "content" in msg
         ]
-        return historico_valido[-6:] # Retorna apenas as últimas 6 interações
+        return historico_valido[-6:]  # Retorna apenas as últimas 6 interações
 
     def _determinar_idioma(self, texto: str) -> str:
 
-        tem_pt = (re.search(r"[ãõçáéíóúàêô]", texto, re.IGNORECASE) or
-                  re.search(r"\b(que|como|quando|onde|reuniao|calendario)\b", texto, re.IGNORECASE))
-        tem_en = re.search(r"\b(what|how|when|where|meeting|calendar)\b", texto, re.IGNORECASE)
-        
+        tem_pt = re.search(r"[ãõçáéíóúàêô]", texto, re.IGNORECASE) or re.search(
+            r"\b(que|como|quando|onde|reuniao|calendario)\b", texto, re.IGNORECASE
+        )
+        tem_en = re.search(
+            r"\b(what|how|when|where|meeting|calendar)\b", texto, re.IGNORECASE
+        )
+
         return "en" if tem_en and not tem_pt else "pt"
 
     def _construir_payload_de_erro_para_entrada_vazia(self) -> Dict[str, Any]:
@@ -246,25 +364,42 @@ class AnalisadorDeMensagem:
             "error": "EMPTY_INPUT",
             "openaiPayload": {
                 "messages": [
-                    {"role": "assistant", "content": "Não recebi sua mensagem. Pode reenviar, por favor?"}
+                    {
+                        "role": "assistant",
+                        "content": "Não recebi sua mensagem. Pode reenviar, por favor?",
+                    }
                 ]
-            }
+            },
         }
 
 
 # --- Endpoint da API ---
 
+
 @app.post("/preprocess", summary="Processa e prepara uma mensagem para a IA")
 async def rota_de_preprocessamento(payload: Dict[str, Any]) -> JSONResponse:
 
     if not payload:
+        logger.warning(
+            "Recebido payload vazio.", extra={"log_type": "request_validation"}
+        )
         raise HTTPException(status_code=400, detail="O payload não pode ser vazio.")
-        
+
+    logger.info(
+        "Nova requisição de pré-processamento recebida",
+        extra={
+            "log_type": "api_request",
+            "has_message": "message" in payload,
+            "has_context": "ctx" in payload,
+            "has_history": "history" in payload,
+        },
+    )
+
     # 1. Cria o Analisador (O "Gerente") para cuidar do pedido.
     analisador = AnalisadorDeMensagem(payload)
-    
+
     # 2. Pede para o Analisador processar a mensagem e preparar o resultado.
     resultado_final = analisador.processar_mensagem()
-    
+
     # 3. Retorna o resultado completo para o n8n.
     return JSONResponse(content=resultado_final)
