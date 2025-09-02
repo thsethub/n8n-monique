@@ -1,5 +1,3 @@
-# docker-compose.yml CORRIGIDO
-
 version: '3.8'
 
 services:

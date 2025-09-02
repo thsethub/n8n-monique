@@ -1,34 +1,37 @@
 import logging
 import re
-import logging
-import re
+import sys
 from typing import Any, Dict, List, Set, Tuple
 
+import structlog
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 from unidecode import unidecode
-from python_json_logger import jsonlogger
 
-# --- Configuração do Logging Estruturado ---
-# Remove qualquer configuração de logger existente para evitar duplicação
-for handler in logging.root.handlers[:]:
-    logging.root.removeHandler(handler)
+# Configuração do Logging Estruturado com Structlog
+structlog.configure(
+    processors=[
+        structlog.stdlib.add_log_level,
+        structlog.stdlib.add_logger_name,
+        structlog.processors.TimeStamper(fmt="iso", utc=True),
+        structlog.processors.format_exc_info,
+        structlog.processors.JSONRenderer(),
+    ],
+    context_class=dict,
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    wrapper_class=structlog.stdlib.BoundLogger,
+    cache_logger_on_first_use=True,
+)
+logging.basicConfig(level=logging.INFO, stream=sys.stdout, format="%(message)s")
+logger = structlog.get_logger()
 
-# Configura o logger para emitir logs em formato JSON
-logHandler = logging.StreamHandler()
-# Adiciona campos padrão que o Grafana Loki/ELK entendem bem
-formatter = jsonlogger.JsonFormatter("%(asctime)s %(name)s %(levelname)s %(message)s")
-logHandler.setFormatter(formatter)
-logging.basicConfig(level=logging.INFO, handlers=[logHandler])
-logger = logging.getLogger(__name__)
-
-# --- Configuração do FastAPI ---
+# Configuração do FastAPI
 app = FastAPI(
     title="Serviço de Análise e Preparação de Mensagens para IA",
     description="Uma API que recebe uma mensagem, a classifica e prepara um payload otimizado para a IA.",
 )
 
-# --- Constantes de Configuração ---
+# Constantes de Configuração
 # Palavras-chave que indicam a necessidade de integrações ou ferramentas.
 # Usar um Set (conjunto) torna a busca por palavras muito mais rápida.
 PALAVRAS_CHAVE_DE_SISTEMA: Set[str] = {
@@ -85,7 +88,7 @@ class AnalisadorDeMensagem:
         self.payload_original = payload_da_requisicao or {}
         self.contexto = self.payload_original.get("ctx", {})
 
-    # --- Etapa 1: Orquestração Principal ---
+    # Etapa 1: Orquestração Principal
 
     def processar_mensagem(self) -> Dict[str, Any]:
 
@@ -126,18 +129,16 @@ class AnalisadorDeMensagem:
 
         logger.info(
             "Mensagem processada com sucesso",
-            extra={
-                "log_type": "preprocessing_result",
-                "classification_bucket": categoria,
-                "integrations_found": integrações,
-                "original_message_length": len(mensagem_usuario),
-                "model_used": payload_para_ia.get("model"),
-            },
+            log_type="preprocessing_result",
+            classification_bucket=categoria,
+            integrations_found=integrações,
+            original_message_length=len(mensagem_usuario),
+            model_used=payload_para_ia.get("model"),
         )
 
         return resposta_final
 
-    # --- Etapa 2: Funções Auxiliares de Preparação ---
+    # Etapa 2: Funções Auxiliares de Preparação
 
     def _extrair_mensagem_do_payload(self) -> str:
 
@@ -152,7 +153,7 @@ class AnalisadorDeMensagem:
         texto_sem_acentos = unidecode(texto_minusculo)
         return texto_sem_acentos
 
-    # --- Etapa 3: Funções de Análise e Classificação ---
+    # Etapa 3: Funções de Análise e Classificação
 
     def _determinar_categoria_da_mensagem(
         self, mensagem_original: str, texto_normalizado: str
@@ -223,7 +224,7 @@ class AnalisadorDeMensagem:
             or tem_multiplas_frases
         )
 
-    # --- Etapa 4: Funções de Construção do Payload para a IA ---
+    # Etapa 4: Funções de Construção do Payload para a IA
 
     def _construir_payload_para_ia(
         self, categoria: str, mensagem_original: str, texto_normalizado: str
@@ -373,26 +374,22 @@ class AnalisadorDeMensagem:
         }
 
 
-# --- Endpoint da API ---
+# Endpoint da API
 
 
 @app.post("/preprocess", summary="Processa e prepara uma mensagem para a IA")
 async def rota_de_preprocessamento(payload: Dict[str, Any]) -> JSONResponse:
 
     if not payload:
-        logger.warning(
-            "Recebido payload vazio.", extra={"log_type": "request_validation"}
-        )
+        logger.warning("Recebido payload vazio.", log_type="request_validation")
         raise HTTPException(status_code=400, detail="O payload não pode ser vazio.")
 
     logger.info(
-        "Nova requisição de pré-processamento recebida",
-        extra={
-            "log_type": "api_request",
-            "has_message": "message" in payload,
-            "has_context": "ctx" in payload,
-            "has_history": "history" in payload,
-        },
+        "Nova requisicao de preprocessamento recebida",
+        log_type="api_request",
+        has_message="message" in payload,
+        has_context="ctx" in payload,
+        has_history="history" in payload,
     )
 
     # 1. Cria o Analisador (O "Gerente") para cuidar do pedido.
