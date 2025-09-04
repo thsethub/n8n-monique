@@ -1,10 +1,11 @@
 import logging
 import re
 import sys
+import time
 from typing import Any, Dict, List, Set, Tuple
 
 import structlog
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from unidecode import unidecode
 
@@ -30,6 +31,64 @@ app = FastAPI(
     title="Serviço de Análise e Preparação de Mensagens para IA",
     description="Uma API que recebe uma mensagem, a classifica e prepara um payload otimizado para a IA.",
 )
+
+
+# --- Middleware de Monitoramento de Latência ---
+@app.middleware("http")
+async def log_request_latency_middleware(request: Request, call_next):
+    """
+    Middleware que mede o tempo de processamento de cada requisição
+    e registra logs estruturados com métricas de performance.
+    """
+    start_time = time.time()
+
+    # Captura informações da requisição
+    method = request.method
+    path = request.url.path
+    user_agent = request.headers.get("user-agent", "unknown")
+    content_length = request.headers.get("content-length", "0")
+
+    try:
+        # Processa a requisição
+        response = await call_next(request)
+
+        # Calcula métricas de performance
+        duration_ms = round((time.time() - start_time) * 1000, 2)
+
+        # Log estruturado com todas as métricas importantes para o dashboard
+        logger.info(
+            "Requisição processada com sucesso",
+            log_type="api_performance",
+            method=method,
+            path=path,
+            status_code=response.status_code,
+            duration_ms=duration_ms,
+            request_size_bytes=int(content_length) if content_length.isdigit() else 0,
+            user_agent=user_agent[:50],  # Limita o tamanho para não poluir os logs
+        )
+
+        # Adiciona o header com a duração na resposta (útil para debugging)
+        response.headers["X-Process-Time"] = str(duration_ms)
+
+        return response
+
+    except Exception as e:
+        # Em caso de erro, ainda registra o tempo de processamento
+        duration_ms = round((time.time() - start_time) * 1000, 2)
+
+        logger.error(
+            "Erro durante processamento da requisição",
+            log_type="api_performance",
+            method=method,
+            path=path,
+            duration_ms=duration_ms,
+            error_type=type(e).__name__,
+            error_message=str(e)[:100],  # Limita a mensagem de erro
+        )
+
+        # Re-levanta a exceção para que o FastAPI a trate normalmente
+        raise
+
 
 # Constantes de Configuração
 # Palavras-chave que indicam a necessidade de integrações ou ferramentas.
@@ -245,8 +304,11 @@ class AnalisadorDeMensagem:
 
         parametros_dinamicos = self._calcular_parametros_da_ia(categoria)
 
+        # Define o modelo baseado na categoria
+        modelo_selecionado = self._selecionar_modelo_ia(categoria)
+
         payload_final = {
-            "model": self.contexto.get("model", "gpt-4.1-mini"),
+            "model": modelo_selecionado,
             "messages": mensagens,
             **parametros_dinamicos,  # Adiciona temperature e max_tokens
         }
@@ -319,6 +381,23 @@ class AnalisadorDeMensagem:
 
         return prompts, integracoes_detectadas
 
+    def _selecionar_modelo_ia(self, categoria: str) -> str:
+        """
+        Seleciona o modelo de IA mais apropriado baseado na categoria da mensagem.
+        """
+        # Permite override manual pelo contexto
+        modelo_customizado = self.contexto.get("model")
+        if modelo_customizado:
+            return modelo_customizado
+
+        # Seleção automática baseada na categoria
+        if categoria == "messages":
+            # Para perguntas diretas, usa o modelo mais rápido
+            return "gpt-4o-mini"
+        else:  # categoria == "user" ou "system"
+            # Para mensagens complexas e integrações, usa o modelo padrão
+            return "gpt-4.1-mini"
+
     def _calcular_parametros_da_ia(self, categoria: str) -> Dict[str, Any]:
 
         temp_base = float(self.contexto.get("temperature", 0.3))
@@ -384,14 +463,6 @@ async def rota_de_preprocessamento(payload: Dict[str, Any]) -> JSONResponse:
         logger.warning("Recebido payload vazio.", log_type="request_validation")
         raise HTTPException(status_code=400, detail="O payload não pode ser vazio.")
 
-    logger.info(
-        "Nova requisicao de preprocessamento recebida",
-        log_type="api_request",
-        has_message="message" in payload,
-        has_context="ctx" in payload,
-        has_history="history" in payload,
-    )
-
     # 1. Cria o Analisador (O "Gerente") para cuidar do pedido.
     analisador = AnalisadorDeMensagem(payload)
 
@@ -400,3 +471,15 @@ async def rota_de_preprocessamento(payload: Dict[str, Any]) -> JSONResponse:
 
     # 3. Retorna o resultado completo para o n8n.
     return JSONResponse(content=resultado_final)
+
+
+# Endpoint de Health Check
+@app.get("/health", summary="Verifica o status do serviço")
+async def health_check():
+
+    return {
+        "status": "healthy",
+        "service": "preproc-api",
+        "version": "1.0.0",
+        "timestamp": time.time(),
+    }
