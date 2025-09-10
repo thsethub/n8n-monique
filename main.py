@@ -333,7 +333,7 @@ class AnalisadorDeMensagem:
         if categoria == "system":
             # Detecta quais integrações podem ser necessárias e retorna as URLs específicas
             if any(k in texto_normalizado for k in ["calendar", "agenda", "evento", "compromisso"]):
-                scope_detectadas.append("https://www.googleapis.com/auth/calendar")
+                scope_detectadas.append("https://www.googleapis.com/auth/calendar.events")
             if any(k in texto_normalizado for k in ["sheet", "planilha", "tabela", "spreadsheet"]):
                 scope_detectadas.append("https://www.googleapis.com/auth/spreadsheets")
             if any(k in texto_normalizado for k in ["gmail", "email", "e-mail"]):
