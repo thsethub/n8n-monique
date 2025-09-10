@@ -167,7 +167,7 @@ class AnalisadorDeMensagem:
         )
 
         # Passo 5: Montar o payload final para a IA com base na categoria.
-        payload_para_ia, integrações = self._construir_payload_para_ia(
+        payload_para_ia, scope = self._construir_payload_para_ia(
             categoria=categoria,
             mensagem_original=mensagem_usuario,
             texto_normalizado=texto_normalizado,
@@ -182,7 +182,7 @@ class AnalisadorDeMensagem:
             "classification": {
                 "bucket": categoria,
                 "reasons": motivos,
-                "integrations": integrações,
+                "scope": scope,
             },
         }
 
@@ -190,7 +190,7 @@ class AnalisadorDeMensagem:
             "Mensagem processada com sucesso",
             log_type="preprocessing_result",
             classification_bucket=categoria,
-            integrations_found=integrações,
+            scope_found=scope,
             original_message_length=len(mensagem_usuario),
             model_used=payload_para_ia.get("model"),
         )
@@ -291,7 +291,7 @@ class AnalisadorDeMensagem:
 
         idioma = self.contexto.get("lang") or self._determinar_idioma(mensagem_original)
 
-        prompts_de_sistema, integrações = self._criar_prompts_de_sistema(
+        prompts_de_sistema, scope = self._criar_prompts_de_sistema(
             categoria, idioma, texto_normalizado
         )
         historico_da_conversa = self._obter_historico_da_conversa()
@@ -312,14 +312,14 @@ class AnalisadorDeMensagem:
             "messages": mensagens,
             **parametros_dinamicos,  # Adiciona temperature e max_tokens
         }
-        return payload_final, integrações
+        return payload_final, scope
 
     def _criar_prompts_de_sistema(
         self, categoria: str, idioma: str, texto_normalizado: str
     ) -> Tuple[List[Dict[str, str]], List[str]]:
 
         prompts = []
-        integracoes_detectadas = []
+        scope_detectadas = []
 
         # 1. Prompt de Idioma (sempre adicionado)
         prompt_idioma = (
@@ -331,30 +331,25 @@ class AnalisadorDeMensagem:
 
         # 2. Prompts Específicos da Categoria
         if categoria == "system":
-            # Detecta quais integrações podem ser necessárias
-            if any(
-                k in texto_normalizado
-                for k in [
-                    "google",
-                    "drive",
-                    "docs",
-                    "sheet",
-                    "planilha",
-                    "calendar",
-                    "agenda",
-                ]
-            ):
-                integracoes_detectadas.append("google")
+            # Detecta quais integrações podem ser necessárias e retorna as URLs específicas
+            if any(k in texto_normalizado for k in ["calendar", "agenda", "evento", "compromisso"]):
+                scope_detectadas.append("https://www.googleapis.com/auth/calendar")
+            if any(k in texto_normalizado for k in ["sheet", "planilha", "tabela", "spreadsheet"]):
+                scope_detectadas.append("https://www.googleapis.com/auth/spreadsheets")
+            if any(k in texto_normalizado for k in ["gmail", "email", "e-mail"]):
+                scope_detectadas.append("https://www.googleapis.com/auth/gmail.modify")
+            if any(k in texto_normalizado for k in ["drive", "documento", "document", "doc", "arquivo", "file"]):
+                scope_detectadas.append("https://www.googleapis.com/auth/drive")
             if any(k in texto_normalizado for k in ["apple", "icloud", "notes"]):
-                integracoes_detectadas.append("apple")
+                scope_detectadas.append("apple")
             if any(k in texto_normalizado for k in ["boleto", "fatura", "cobranca"]):
-                integracoes_detectadas.append("boleto")
+                scope_detectadas.append("boleto")
 
-            integracoes_str = ", ".join(integracoes_detectadas) or "nenhuma"
+            scope_str = ", ".join(scope_detectadas) or "nenhuma"
             prompts.append(
                 {
                     "role": "system",
-                    "content": f"MODO INTEGRAÇÃO ATIVO. A intenção do usuário parece ser usar ferramentas como calendário, documentos ou pagamentos. Antes de agir, sempre confirme os detalhes necessários. Informe que usaria as APIs ({integracoes_str}) e peça confirmação.",
+                    "content": f"MODO INTEGRAÇÃO ATIVO. A intenção do usuário parece ser usar ferramentas como calendário, documentos ou pagamentos. Antes de agir, sempre confirme os detalhes necessários. Informe que usaria as APIs ({scope_str}) e peça confirmação.",
                 }
             )
         else:  # Categoria 'user' ou 'messages'
@@ -379,7 +374,7 @@ class AnalisadorDeMensagem:
                     }
                 )
 
-        return prompts, integracoes_detectadas
+        return prompts, scope_detectadas
 
     def _selecionar_modelo_ia(self, categoria: str) -> str:
         """
