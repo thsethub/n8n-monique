@@ -106,7 +106,6 @@ PALAVRAS_CHAVE_DE_SISTEMA: Set[str] = {
     "file",
     "pdf",
     "drive",
-    "icloud",
     "armazenamento",
     "storage",
     # Calendário e organização pessoal
@@ -131,7 +130,9 @@ PALAVRAS_CHAVE_DE_SISTEMA: Set[str] = {
     "api",
     "oauth",
     "google",
-    "apple",
+    "gmail",
+    "email",
+    "e-mail",
     # Financeiro
     "boleto",
     "fatura",
@@ -314,6 +315,60 @@ class AnalisadorDeMensagem:
         }
         return payload_final, scope
 
+    def _detectar_scopes_com_prioridade_contextual(self, texto_normalizado: str) -> List[str]:
+        """
+        Detecta scopes necessários considerando o contexto principal da mensagem.
+        Prioriza a ação principal para evitar scopes desnecessários, mas permite múltiplas intenções claras.
+        """
+        scope_detectadas = []
+        
+        # Verifica se há ações específicas de email
+        acoes_email = ["envie", "mande", "escreva", "responda", "encaminhe", "send", "reply", "forward"]
+        tem_acao_email = any(acao in texto_normalizado for acao in acoes_email)
+        tem_palavra_email = any(palavra in texto_normalizado for palavra in ["gmail", "email", "e-mail"])
+        
+        # Verifica se há ações específicas de calendário
+        acoes_calendario = ["agende", "marque", "crie evento", "adicione evento", "schedule", "book"]
+        tem_acao_calendario = any(acao in texto_normalizado for acao in acoes_calendario)
+        tem_palavra_calendario = any(palavra in texto_normalizado for palavra in ["calendar", "agenda", "evento", "reuniao", "meeting"])
+        
+        # Verifica se há múltiplas intenções explícitas (conectores como "e depois", "também", "e")
+        tem_multiplas_acoes = any(conector in texto_normalizado for conector in ["e depois", "tambem", "alem disso", "and then", "also"])
+        
+        # Se há clara intenção de email E calendário com conectores, inclui ambos
+        if (tem_acao_email and tem_palavra_email) and (tem_acao_calendario or tem_palavra_calendario) and tem_multiplas_acoes:
+            scope_detectadas.append("https://www.googleapis.com/auth/gmail.modify")
+            scope_detectadas.append("https://www.googleapis.com/auth/calendar.events")
+            return scope_detectadas
+        
+        # Se há clara intenção de email, prioriza apenas o scope de email
+        if tem_acao_email and tem_palavra_email:
+            scope_detectadas.append("https://www.googleapis.com/auth/gmail.modify")
+            return scope_detectadas
+        
+        # Se há clara intenção de calendário, prioriza apenas o scope de calendário
+        if tem_acao_calendario and (tem_palavra_calendario or any(palavra in texto_normalizado for palavra in ["compromisso"])):
+            scope_detectadas.append("https://www.googleapis.com/auth/calendar.events")
+            return scope_detectadas
+        
+        # Lógica tradicional para casos ambíguos ou múltiplas intenções claras
+        if any(k in texto_normalizado for k in ["calendar", "agenda", "evento"]):
+            scope_detectadas.append("https://www.googleapis.com/auth/calendar.events")
+        # Só adiciona "compromisso" se não houver ação clara de email
+        elif any(k in texto_normalizado for k in ["compromisso"]) and not tem_acao_email:
+            scope_detectadas.append("https://www.googleapis.com/auth/calendar.events")
+            
+        if any(k in texto_normalizado for k in ["sheet", "planilha", "tabela", "spreadsheet"]):
+            scope_detectadas.append("https://www.googleapis.com/auth/spreadsheets")
+        if any(k in texto_normalizado for k in ["gmail", "email", "e-mail"]):
+            scope_detectadas.append("https://www.googleapis.com/auth/gmail.modify")
+        if any(k in texto_normalizado for k in ["drive", "documento", "document", "doc", "arquivo", "file"]):
+            scope_detectadas.append("https://www.googleapis.com/auth/drive")
+        if any(k in texto_normalizado for k in ["boleto", "fatura", "cobranca"]):
+            scope_detectadas.append("boleto")
+            
+        return scope_detectadas
+
     def _criar_prompts_de_sistema(
         self, categoria: str, idioma: str, texto_normalizado: str
     ) -> Tuple[List[Dict[str, str]], List[str]]:
@@ -331,19 +386,8 @@ class AnalisadorDeMensagem:
 
         # 2. Prompts Específicos da Categoria
         if categoria == "system":
-            # Detecta quais integrações podem ser necessárias e retorna as URLs específicas
-            if any(k in texto_normalizado for k in ["calendar", "agenda", "evento", "compromisso"]):
-                scope_detectadas.append("https://www.googleapis.com/auth/calendar.events")
-            if any(k in texto_normalizado for k in ["sheet", "planilha", "tabela", "spreadsheet"]):
-                scope_detectadas.append("https://www.googleapis.com/auth/spreadsheets")
-            if any(k in texto_normalizado for k in ["gmail", "email", "e-mail"]):
-                scope_detectadas.append("https://www.googleapis.com/auth/gmail.modify")
-            if any(k in texto_normalizado for k in ["drive", "documento", "document", "doc", "arquivo", "file"]):
-                scope_detectadas.append("https://www.googleapis.com/auth/drive")
-            if any(k in texto_normalizado for k in ["apple", "icloud", "notes"]):
-                scope_detectadas.append("apple")
-            if any(k in texto_normalizado for k in ["boleto", "fatura", "cobranca"]):
-                scope_detectadas.append("boleto")
+            # Detecta quais integrações podem ser necessárias com lógica de prioridade contextual
+            scope_detectadas = self._detectar_scopes_com_prioridade_contextual(texto_normalizado)
 
             scope_str = ", ".join(scope_detectadas) or "nenhuma"
             prompts.append(

@@ -1,2 +1,5 @@
 venv
 test_google_calendar.py
+.pytest_cache
+test_fix.py
+__pycache__
