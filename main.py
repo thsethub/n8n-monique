@@ -348,15 +348,15 @@ class AnalisadorDeMensagem:
         
         # Se há clara intenção de calendário, prioriza apenas o scope de calendário
         if tem_acao_calendario and (tem_palavra_calendario or any(palavra in texto_normalizado for palavra in ["compromisso"])):
-            scope_detectadas.append("https://www.googleapis.com/auth/calendar.events")
+            scope_detectadas.append("https://www.googleapis.com/auth/calendar")
             return scope_detectadas
         
         # Lógica tradicional para casos ambíguos ou múltiplas intenções claras
         if any(k in texto_normalizado for k in ["calendar", "agenda", "evento"]):
-            scope_detectadas.append("https://www.googleapis.com/auth/calendar.events")
+            scope_detectadas.append("https://www.googleapis.com/auth/calendar")
         # Só adiciona "compromisso" se não houver ação clara de email
         elif any(k in texto_normalizado for k in ["compromisso"]) and not tem_acao_email:
-            scope_detectadas.append("https://www.googleapis.com/auth/calendar.events")
+            scope_detectadas.append("https://www.googleapis.com/auth/calendar")
             
         if any(k in texto_normalizado for k in ["sheet", "planilha", "tabela", "spreadsheet"]):
             scope_detectadas.append("https://www.googleapis.com/auth/spreadsheets")
