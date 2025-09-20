@@ -338,7 +338,7 @@ class AnalisadorDeMensagem:
         # Se há clara intenção de email E calendário com conectores, inclui ambos
         if (tem_acao_email and tem_palavra_email) and (tem_acao_calendario or tem_palavra_calendario) and tem_multiplas_acoes:
             scope_detectadas.append("https://www.googleapis.com/auth/gmail.modify")
-            scope_detectadas.append("https://www.googleapis.com/auth/calendar.events")
+            scope_detectadas.append("https://www.googleapis.com/auth/calendar")
             return scope_detectadas
         
         # Se há clara intenção de email, prioriza apenas o scope de email
