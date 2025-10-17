@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Set, Tuple
 
 import structlog
 from cachetools import TTLCache
-from fastapi import FastAPI, HTTPException, Request, Form
+from fastapi import FastAPI, HTTPException, Request, Body
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from unidecode import unidecode
@@ -602,19 +602,20 @@ class AnalisadorDeMensagem:
 # Endpoint da API
 
 @app.post("/webhook", summary="Webhook para receber mensagens do WhatsApp")
-async def webhook_whatsapp(
-    from_number: str = Form(..., alias="from"),
-    message: str = Form(...)
-) -> JSONResponse:
+async def webhook_whatsapp(payload: Dict[str, Any] = Body(...)) -> JSONResponse:
     """
     Endpoint simplificado para receber mensagens via webhook (ngrok).
-    Recebe 'from' (número) e 'message' via Form data.
+    Recebe JSON com 'from' (número) e 'message' (mensagem).
     
     Exemplo de uso com curl:
     curl -X POST http://localhost:8181/webhook \
-      -F "from=5511999999999" \
-      -F "message=agendar reunião amanhã"
+      -H "Content-Type: application/json" \
+      -d '{"from": "5511999999999", "message": "agendar reunião amanhã"}'
     """
+    # Extrai os dados do payload
+    from_number = payload.get("from", "unknown")
+    message = payload.get("message", "")
+    
     logger.info(
         "Webhook recebido",
         log_type="webhook",
@@ -623,7 +624,7 @@ async def webhook_whatsapp(
     )
     
     # Converte para o formato esperado pelo preprocessador
-    payload = {
+    payload_processado = {
         "message": message,
         "ctx": {
             "lang": "pt",
@@ -634,7 +635,7 @@ async def webhook_whatsapp(
     }
     
     # Processa a mensagem
-    analisador = AnalisadorDeMensagem(payload)
+    analisador = AnalisadorDeMensagem(payload_processado)
     resultado_final = await analisador.processar_mensagem()
     
     # Adiciona informações do webhook
@@ -654,7 +655,7 @@ async def webhook_whatsapp(
 
 
 @app.post("/preprocess", summary="Processa e prepara uma mensagem para a IA")
-async def rota_de_preprocessamento(payload: Dict[str, Any]) -> JSONResponse:
+async def rota_de_preprocessamento(payload: Dict[str, Any] = Body(...)) -> JSONResponse:
     """
     Endpoint otimizado com cache e medição de latência.
     Agora é completamente assíncrono para melhor performance.
