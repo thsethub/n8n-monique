@@ -22,22 +22,8 @@ Este é o endpoint mais importante do microserviço. Ele recebe uma mensagem do 
 
 ```json
 {
-  "message": "Preciso agendar uma reunião com o time amanhã às 14h",
-  "ctx": {
-    "lang": "pt",
-    "temperature": 0.3,
-    "model": "gpt-4o-mini"
-  },
-  "history": [
-    {
-      "role": "user",
-      "content": "Oi"
-    },
-    {
-      "role": "assistant",
-      "content": "Olá! Como posso ajudar?"
-    }
-  ]
+  "from": "5511999999999",
+  "message": "Preciso agendar uma reunião com o time amanhã às 14h"
 }
 ```
 
@@ -45,11 +31,8 @@ Este é o endpoint mais importante do microserviço. Ele recebe uma mensagem do 
 
 | Campo | Tipo | Obrigatório | Descrição |
 |-------|------|-------------|-----------|
+| `from` | `string` | ✅ Sim | Número de telefone do remetente (WhatsApp) |
 | `message` | `string` | ✅ Sim | A mensagem do usuário a ser analisada |
-| `ctx.lang` | `string` | ❌ Não | Idioma (`pt` ou `en`). Se omitido, é detectado automaticamente |
-| `ctx.temperature` | `float` | ❌ Não | Temperatura base para o modelo (padrão: `0.3`) |
-| `ctx.model` | `string` | ❌ Não | Modelo OpenAI a usar. Se omitido, é selecionado automaticamente |
-| `history` | `array` | ❌ Não | Histórico da conversa (últimas 3 mensagens são usadas) |
 
 ---
 
@@ -219,8 +202,8 @@ uvicorn app.main:app --reload --port 8181
 curl -X POST http://localhost:8181/preprocess \
   -H "Content-Type: application/json" \
   -d '{
-    "message": "Preciso criar uma planilha com os dados de vendas",
-    "ctx": {"lang": "pt"}
+    "from": "5511999999999",
+    "message": "Preciso criar uma planilha com os dados de vendas"
   }'
 ```
 
@@ -376,12 +359,3 @@ pytest tests/ -v --cov=app --cov-report=html
 
 MIT License - Sinta-se livre para usar e modificar.
 
----
-
-## 🤝 Contribuindo
-
-1. Fork o projeto
-2. Crie uma branch para sua feature (`git checkout -b feature/AmazingFeature`)
-3. Commit suas mudanças (`git commit -m 'Add some AmazingFeature'`)
-4. Push para a branch (`git push origin feature/AmazingFeature`)
-5. Abra um Pull Request
