@@ -90,6 +90,30 @@ class AnalisadorDeMensagem:
         )
         self.latencias["construcao_payload_ms"] = round((time.time() - t0) * 1000, 2)
 
+        # Passo 6.1: Validação inteligente - Reclassificar se SYSTEM sem SCOPE
+        if categoria == "system" and not scope:
+            logger.info(
+                "Reclassificando mensagem: detectada como SYSTEM mas sem scope detectado",
+                log_type="reclassification",
+                original_category="system",
+                message_length=len(mensagem_usuario),
+            )
+            
+            # Reclassificar baseado no tamanho da mensagem
+            if len(mensagem_usuario.split()) <= 15:
+                categoria = "messages"
+            else:
+                categoria = "user"
+            
+            # Reconstruir payload com a nova categoria
+            payload_para_ia, scope = construtor.construir_payload(
+                categoria=categoria,
+                mensagem_original=mensagem_usuario,
+                texto_normalizado=texto_normalizado,
+            )
+            
+            motivos.append(f"Reclassificado de 'system' para '{categoria}' (sem scope detectado)")
+
         # Tempo total
         tempo_total_ms = round((time.time() - tempo_inicio_total) * 1000, 2)
         self.latencias["total_ms"] = tempo_total_ms
