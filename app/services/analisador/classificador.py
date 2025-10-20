@@ -70,15 +70,15 @@ class Classificador:
         """
         # Verbos fortes que indicam ação de integração
         verbos_integracao = {
-            "enviar", "mandar", "send", "disparar",
-            "encaminhar", "forward",
-            "agendar", "marcar", "schedule", "reservar",
-            "criar", "gerar", "produzir", "create",
-            "compartilhar", "share", "upload", "subir",
+            "enviar", "envie", "mandar", "mande", "send", "disparar", "dispare",
+            "encaminhar", "encaminhe", "forward",
+            "agendar", "agende", "marcar", "marque", "schedule", "reservar", "reserve",
+            "criar", "crie", "gerar", "gere", "produzir", "produza", "create",
+            "compartilhar", "compartilhe", "share", "upload", "subir",
             "responder", "reply",
             "editar", "edit", "modificar",
             "fazer upload", "fazer download", "sincronizar",
-            "baixar", "download", "fazer",  # Verbos de ação em arquivos/docs
+            "baixar", "download", "fazer", "faca",
         }
         
         # Objetos ESPECÍFICOS que indicam integração real
@@ -140,8 +140,15 @@ class Classificador:
         
         # MARCAR/AGENDAR com horário é integração
         tem_agendamento_horario = (
-            ("marcar" in texto_normalizado or "agendar" in texto_normalizado) and
-            any(ctx in texto_normalizado for ctx in ["call", "reuniao", "meeting", "as ", "h", "cliente", "urgente"])
+            ("marcar" in texto_normalizado or "marque" in texto_normalizado or 
+             "agendar" in texto_normalizado or "agende" in texto_normalizado or
+             "reservar" in texto_normalizado or "reserve" in texto_normalizado) and
+            any(ctx in texto_normalizado for ctx in [
+                "call", "reuniao", "meeting", "as ", "h", "hr", ":", 
+                "cliente", "urgente", "hoje", "amanha", "semana",
+                "aula", "evento", "compromisso", "para mim", "sala",
+                "segunda", "terca", "quarta", "quinta", "sexta"
+            ])
         )
         
         tem_integracao = (

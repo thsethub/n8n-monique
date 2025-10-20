@@ -9,28 +9,42 @@ from typing import Dict, List, Set
 PALAVRAS_CHAVE_DE_SISTEMA: Set[str] = {
     # ===== VERBOS DE AÇÃO (CORE) =====
     "enviar",
+    "envie",  # imperativo
     "send",
     "mandar",
+    "mande",  # imperativo
     "encaminhar",
+    "encaminhe",  # imperativo
     "disparar",
+    "dispare",  # imperativo
     "criar",
+    "crie",  # imperativo
     "create",
     "gerar",
+    "gere",  # imperativo
     "fazer",
+    "faca",  # imperativo (faça sem acento)
     "produzir",
+    "produza",  # imperativo
     "agendar",
+    "agende",  # imperativo de agendar
     "schedule",
     "marcar",
+    "marque",  # imperativo de marcar
     "reservar",
+    "reserve",  # imperativo de reservar
     "abrir",
     "open",
     "acessar",
     "visualizar",
     "ver",
     "compartilhar",
+    "compartilhe",  # imperativo
     "share",
     "dividir",
+    "divida",  # imperativo
     "colaborar",
+    "colabore",  # imperativo
     "sincronizar",
     "sync",
     "atualizar",
