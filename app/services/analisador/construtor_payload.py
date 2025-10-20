@@ -119,26 +119,33 @@ TOM DE VOZ:
 ❌ Não use jargões técnicos desnecessários
 ❌ Não seja excessivamente formal
 
-FORMATAÇÃO WHATSAPP (CRÍTICO - SIGA EXATAMENTE):
-- Negrito: *texto* (UM asterisco, não dois)
-- Itálico: _texto_ (UM underscore, não dois)
-- Riscado: ~texto~ (UM til)
+FORMATAÇÃO WHATSAPP (CRÍTICO):
+O WhatsApp tem limitações de formatação. Siga EXATAMENTE estas regras:
 
-REGRAS DE FORMATAÇÃO OBRIGATÓRIAS:
-❌ NUNCA use indentação (espaços ou tabs) no início de linhas
-❌ NUNCA use **texto** ou __texto__ (dois símbolos)
-✅ Listas: use hífen (-) ou número (1.) SEM RECUO/ESPAÇOS antes
-✅ Linha em branco entre tópicos principais
-✅ Subtópicos começam com (-) colado na margem esquerda
+✅ Use emojis para destacar (📚 ✨ 💡 ⚡ etc)
+✅ Use MAIÚSCULAS para ênfase quando necessário
+✅ Quebre linhas para separar ideias
+❌ NÃO use * _ ~ para formatação (quebra no WhatsApp)
+❌ NÃO use indentação (espaços/tabs no início)
 
-EXEMPLO ERRADO:
-1. *Tópico*:
-  - Subtópico (ERRADO - tem espaços!)
+ESTRUTURA DE LISTAS:
+Formato CORRETO para listas no WhatsApp:
 
-EXEMPLO CORRETO:
-1. *Tópico*:
-- Subtópico (CERTO - sem espaços!)
-- Outro subtópico
+1. Primeiro ponto
+Explicação do primeiro ponto aqui.
+
+2. Segundo ponto
+Explicação do segundo ponto.
+
+OU use este formato simples:
+
+📌 Primeiro ponto - Explicação direta
+📌 Segundo ponto - Explicação direta
+
+NUNCA faça assim:
+1. Título:
+- Subtópico (quebra!)
+- Subtópico (quebra!)
 
 Use emojis ocasionalmente.""",
                 }
@@ -151,12 +158,23 @@ Use emojis ocasionalmente.""",
 
 COMO RESPONDER:
 1. Mostre que entendeu fazendo 1-2 perguntas (se necessário)
-2. Estruture em tópicos numerados SEM INDENTAÇÃO
+2. Estruture em tópicos numerados ou com emojis
 3. Dê exemplos práticos
 4. Seja detalhado mas não verboso
 5. Termine oferecendo ajuda
 
-LEMBRE-SE: NO WHATSAPP, SUBTÓPICOS NÃO PODEM TER ESPAÇOS/TABS ANTES DO HÍFEN!""",
+FORMATO CORRETO:
+1. Título do tópico
+Explicação aqui na linha seguinte.
+
+2. Próximo tópico
+Outra explicação.
+
+OU:
+📌 Ponto importante - Explicação direta
+📌 Outro ponto - Explicação direta
+
+NUNCA use hífen após dois pontos ou formatação * _ ~""",
                     }
                 )
             elif categoria == "messages":
