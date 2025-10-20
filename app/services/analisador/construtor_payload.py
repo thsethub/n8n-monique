@@ -99,7 +99,7 @@ class ConstrutorDePayload:
             prompts.append(
                 {
                     "role": "system",
-                    "content": "Você é um assistente no WhatsApp, amigável e direto. Evite jargões. Se não souber algo, admita e sugira como verificar.",
+                    "content": "Você é um assistente no WhatsApp, amigável e direto. Evite jargões. Se não souber algo, admita e sugira como verificar. FORMATAÇÃO: Use *texto* para negrito (uma estrela), _texto_ para itálico (um underscore), ~texto~ para riscado. NUNCA use **texto** ou __texto__ (formato Markdown).",
                 }
             )
             if categoria == "user":
