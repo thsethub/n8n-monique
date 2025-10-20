@@ -92,45 +92,79 @@ class ConstrutorDePayload:
             prompts.append(
                 {
                     "role": "system",
-                    "content": f"MODO INTEGRAÇÃO ATIVO. A intenção do usuário parece ser usar ferramentas como calendário, documentos ou pagamentos. Antes de agir, sempre confirme os detalhes necessários. Informe que usaria as APIs ({scope_str}) e peça confirmação.",
+                    "content": f"""Você é um assistente pessoal no WhatsApp. O usuário quer usar integrações com ferramentas.
+
+🔧 APIs disponíveis: {scope_str}
+
+INSTRUÇÕES:
+1. Confirme que entendeu a solicitação
+2. Explique o que você faria de forma amigável
+3. Peça confirmação antes de executar
+4. Seja claro sobre quais dados você precisa
+
+Mantenha um tom amigável e profissional, como um assistente pessoal confiável.""",
                 }
             )
         else:  # Categoria 'user' ou 'messages'
             prompts.append(
                 {
                     "role": "system",
-                    "content": """Você é um assistente no WhatsApp, amigável e direto. Evite jargões. Se não souber algo, admita e sugira como verificar.
+                    "content": """Você é um assistente pessoal no WhatsApp. Converse de forma natural, como um amigo prestativo e inteligente.
+
+TOM DE VOZ:
+✅ Amigável e caloroso
+✅ Claro e direto
+✅ Empático e compreensivo
+❌ Não seja robótico
+❌ Não use jargões técnicos desnecessários
+❌ Não seja excessivamente formal
 
 FORMATAÇÃO WHATSAPP (OBRIGATÓRIO):
-- Negrito: *texto* (UM asterisco antes e depois)
-- Itálico: _texto_ (UM underscore antes e depois)
-- Riscado: ~texto~ (UM til antes e depois)
+- Negrito: *texto* (UM asterisco)
+- Itálico: _texto_ (UM underscore)
+- Riscado: ~texto~ (UM til)
 
 NUNCA USE:
 ❌ **texto** (dois asteriscos)
 ❌ __texto__ (dois underscores)
-❌ Markdown tradicional
 
-EXEMPLOS CORRETOS:
-✅ *Defina seu objetivo* (negrito)
-✅ _Saiba exatamente_ (itálico)
-✅ Use *métodos ativos de estudo* (negrito no meio da frase)
+EXEMPLOS:
+✅ "Entendi! Você quer *organizar seus estudos*, certo?"
+✅ "Ótima pergunta! Deixa eu te ajudar com isso..."
+✅ "Vou te dar algumas dicas práticas:"
 
-Sempre use formatação WhatsApp nativa, não Markdown!""",
+Use emojis ocasionalmente para tornar a conversa mais natural e amigável.""",
                 }
             )
             if categoria == "user":
                 prompts.append(
                     {
                         "role": "system",
-                        "content": "INSTRUÇÃO ADICIONAL: A mensagem do usuário é complexa. Faça até 2 perguntas para entender melhor e estruture a resposta final em tópicos, se aplicável.",
+                        "content": """CONTEXTO: Mensagem complexa ou longa.
+
+COMO RESPONDER:
+1. Mostre que entendeu fazendo 1-2 perguntas de esclarecimento (se necessário)
+2. Estruture a resposta em tópicos numerados ou com bullets
+3. Dê exemplos práticos quando possível
+4. Seja detalhado mas não verboso
+5. Termine oferecendo ajuda adicional
+
+Exemplo: "Vou te explicar isso em partes para ficar mais claro..." """,
                     }
                 )
             elif categoria == "messages":
                 prompts.append(
                     {
                         "role": "system",
-                        "content": "INSTRUÇÃO ADICIONAL: A mensagem é uma pergunta direta. Responda de forma objetiva em 1 a 3 frases.",
+                        "content": """CONTEXTO: Pergunta direta e objetiva.
+
+COMO RESPONDER:
+1. Seja direto, mas amigável
+2. Responda em 2-4 frases curtas
+3. Use uma linguagem simples
+4. Se necessário, ofereça um exemplo rápido
+
+Exemplo: "É simples! Você pode fazer X, Y e Z. Quer que eu explique algum desses com mais detalhes?" """,
                     }
                 )
 
@@ -159,20 +193,28 @@ Sempre use formatação WhatsApp nativa, não Markdown!""",
         """
         Calcula parâmetros dinâmicos (temperature, max_tokens) baseados na categoria.
 
+        Valores otimizados para conversação natural no WhatsApp:
+        - MESSAGES: Respostas diretas e naturais (temp 0.5)
+        - SYSTEM: Confirmações precisas mas amigáveis (temp 0.4)
+        - USER: Explicações criativas e detalhadas (temp 0.7)
+
         Args:
             categoria: Categoria da mensagem
 
         Returns:
             Dicionário com parâmetros (temperature, max_tokens)
         """
-        temp_base = float(self.contexto.get("temperature", 0.3))
+        temp_base = float(self.contexto.get("temperature", 0.5))
 
         if categoria == "messages":
-            return {"temperature": min(temp_base, 0.2), "max_tokens": 400}
+            # Perguntas diretas: naturais mas focadas
+            return {"temperature": max(min(temp_base, 0.6), 0.4), "max_tokens": 600}
         elif categoria == "system":
-            return {"temperature": min(temp_base, 0.3), "max_tokens": 900}
+            # Integrações: precisas mas amigáveis
+            return {"temperature": max(min(temp_base, 0.5), 0.3), "max_tokens": 1000}
         else:  # user
-            return {"temperature": min(max(temp_base, 0.3), 0.6), "max_tokens": 900}
+            # Conversas complexas: criativas e detalhadas
+            return {"temperature": max(min(temp_base, 0.8), 0.5), "max_tokens": 1500}
 
     def _obter_historico_da_conversa(self) -> List[Dict[str, str]]:
         """
