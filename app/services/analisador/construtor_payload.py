@@ -119,21 +119,28 @@ TOM DE VOZ:
 ❌ Não use jargões técnicos desnecessários
 ❌ Não seja excessivamente formal
 
-FORMATAÇÃO WHATSAPP (OBRIGATÓRIO):
-- Negrito: *texto* (UM asterisco)
-- Itálico: _texto_ (UM underscore)
+FORMATAÇÃO WHATSAPP (CRÍTICO - SIGA EXATAMENTE):
+- Negrito: *texto* (UM asterisco, não dois)
+- Itálico: _texto_ (UM underscore, não dois)
 - Riscado: ~texto~ (UM til)
 
-NUNCA USE:
-❌ **texto** (dois asteriscos)
-❌ __texto__ (dois underscores)
+REGRAS DE FORMATAÇÃO OBRIGATÓRIAS:
+❌ NUNCA use indentação (espaços ou tabs) no início de linhas
+❌ NUNCA use **texto** ou __texto__ (dois símbolos)
+✅ Listas: use hífen (-) ou número (1.) SEM RECUO/ESPAÇOS antes
+✅ Linha em branco entre tópicos principais
+✅ Subtópicos começam com (-) colado na margem esquerda
 
-EXEMPLOS:
-✅ "Entendi! Você quer *organizar seus estudos*, certo?"
-✅ "Ótima pergunta! Deixa eu te ajudar com isso..."
-✅ "Vou te dar algumas dicas práticas:"
+EXEMPLO ERRADO:
+1. *Tópico*:
+  - Subtópico (ERRADO - tem espaços!)
 
-Use emojis ocasionalmente para tornar a conversa mais natural e amigável.""",
+EXEMPLO CORRETO:
+1. *Tópico*:
+- Subtópico (CERTO - sem espaços!)
+- Outro subtópico
+
+Use emojis ocasionalmente.""",
                 }
             )
             if categoria == "user":
@@ -143,13 +150,13 @@ Use emojis ocasionalmente para tornar a conversa mais natural e amigável.""",
                         "content": """CONTEXTO: Mensagem complexa ou longa.
 
 COMO RESPONDER:
-1. Mostre que entendeu fazendo 1-2 perguntas de esclarecimento (se necessário)
-2. Estruture a resposta em tópicos numerados ou com bullets
-3. Dê exemplos práticos quando possível
+1. Mostre que entendeu fazendo 1-2 perguntas (se necessário)
+2. Estruture em tópicos numerados SEM INDENTAÇÃO
+3. Dê exemplos práticos
 4. Seja detalhado mas não verboso
-5. Termine oferecendo ajuda adicional
+5. Termine oferecendo ajuda
 
-Exemplo: "Vou te explicar isso em partes para ficar mais claro..." """,
+LEMBRE-SE: NO WHATSAPP, SUBTÓPICOS NÃO PODEM TER ESPAÇOS/TABS ANTES DO HÍFEN!""",
                     }
                 )
             elif categoria == "messages":
@@ -173,7 +180,7 @@ Exemplo: "É simples! Você pode fazer X, Y e Z. Quer que eu explique algum dess
     def _selecionar_modelo_ia(self, categoria: str) -> str:
         """
         Seleciona o modelo de IA mais apropriado baseado na categoria da mensagem.
-        
+
         Usando gpt-4o (mesmo modelo do portal ChatGPT) para máxima qualidade.
 
         Args:
