@@ -98,21 +98,23 @@ class AnalisadorDeMensagem:
                 original_category="system",
                 message_length=len(mensagem_usuario),
             )
-            
+
             # Reclassificar baseado no tamanho da mensagem
             if len(mensagem_usuario.split()) <= 15:
                 categoria = "messages"
             else:
                 categoria = "user"
-            
+
             # Reconstruir payload com a nova categoria
             payload_para_ia, scope = construtor.construir_payload(
                 categoria=categoria,
                 mensagem_original=mensagem_usuario,
                 texto_normalizado=texto_normalizado,
             )
-            
-            motivos.append(f"Reclassificado de 'system' para '{categoria}' (sem scope detectado)")
+
+            motivos.append(
+                f"Reclassificado de 'system' para '{categoria}' (sem scope detectado)"
+            )
 
         # Tempo total
         tempo_total_ms = round((time.time() - tempo_inicio_total) * 1000, 2)
