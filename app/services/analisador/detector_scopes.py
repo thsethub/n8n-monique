@@ -59,7 +59,12 @@ class DetectorDeScopes:
         )
         tem_palavra_calendario = any(
             palavra in texto_normalizado
-            for palavra in ["calendar", "agenda", "evento", "reuniao", "meeting"]
+            for palavra in [
+                "calendar", "agenda", "evento", "reuniao", "meeting",
+                "aula", "sala", "hoje", "amanha", "hr", ":", 
+                "segunda", "terca", "quarta", "quinta", "sexta", 
+                "sabado", "domingo"
+            ]
         )
 
         # Verifica se há múltiplas intenções explícitas
