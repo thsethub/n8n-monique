@@ -173,6 +173,8 @@ Exemplo: "É simples! Você pode fazer X, Y e Z. Quer que eu explique algum dess
     def _selecionar_modelo_ia(self, categoria: str) -> str:
         """
         Seleciona o modelo de IA mais apropriado baseado na categoria da mensagem.
+        
+        Usando gpt-4o (mesmo modelo do portal ChatGPT) para máxima qualidade.
 
         Args:
             categoria: Categoria da mensagem
@@ -184,19 +186,17 @@ Exemplo: "É simples! Você pode fazer X, Y e Z. Quer que eu explique algum dess
         if modelo_customizado:
             return modelo_customizado
 
-        if categoria == "messages":
-            return "gpt-4o-mini"
-        else:
-            return "gpt-4.1-mini"
+        # Usar gpt-4o (mesmo do portal ChatGPT) para todas as categorias
+        return "gpt-4o"
 
     def _calcular_parametros_da_ia(self, categoria: str) -> Dict[str, Any]:
         """
         Calcula parâmetros dinâmicos (temperature, max_tokens) baseados na categoria.
 
-        Valores otimizados para conversação natural no WhatsApp:
-        - MESSAGES: Respostas diretas e naturais (temp 0.5)
-        - SYSTEM: Confirmações precisas mas amigáveis (temp 0.4)
-        - USER: Explicações criativas e detalhadas (temp 0.7)
+        Valores similares ao portal ChatGPT para conversação natural:
+        - MESSAGES: Temperature 1.0 (padrão ChatGPT), respostas naturais
+        - SYSTEM: Temperature 0.7 (confirmações amigáveis)
+        - USER: Temperature 1.0 (explicações criativas como ChatGPT)
 
         Args:
             categoria: Categoria da mensagem
@@ -204,17 +204,17 @@ Exemplo: "É simples! Você pode fazer X, Y e Z. Quer que eu explique algum dess
         Returns:
             Dicionário com parâmetros (temperature, max_tokens)
         """
-        temp_base = float(self.contexto.get("temperature", 0.5))
+        temp_base = float(self.contexto.get("temperature", 1.0))
 
         if categoria == "messages":
-            # Perguntas diretas: naturais mas focadas
-            return {"temperature": max(min(temp_base, 0.6), 0.4), "max_tokens": 600}
+            # Perguntas diretas: naturais e conversacionais (padrão ChatGPT)
+            return {"temperature": min(temp_base, 1.0), "max_tokens": 800}
         elif categoria == "system":
             # Integrações: precisas mas amigáveis
-            return {"temperature": max(min(temp_base, 0.5), 0.3), "max_tokens": 1000}
+            return {"temperature": min(temp_base, 0.7), "max_tokens": 1200}
         else:  # user
-            # Conversas complexas: criativas e detalhadas
-            return {"temperature": max(min(temp_base, 0.8), 0.5), "max_tokens": 1500}
+            # Conversas complexas: criativas como ChatGPT
+            return {"temperature": min(temp_base, 1.0), "max_tokens": 2000}
 
     def _obter_historico_da_conversa(self) -> List[Dict[str, str]]:
         """
