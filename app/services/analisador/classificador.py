@@ -9,6 +9,12 @@ from app.utils.regex import (
     REGEX_PLANO_ESTRATEGIA,
     REGEX_MULTIPLAS_FRASES,
 )
+from app.utils.lematizador import (
+    lematizar_texto,
+    extrair_verbos_de_acao,
+    tem_verbo_de_acao,
+    VERBOS_INFINITIVOS,
+)
 from .constantes import PALAVRAS_CHAVE_DE_SISTEMA
 
 
@@ -65,6 +71,9 @@ class Classificador:
         """
         Verifica se há intenção clara de usar integração/ferramenta.
         REGRA CHAVE: verbo de ação + objeto específico de integração
+        
+        MELHORIA: Agora usa lematização para detectar qualquer conjugação verbal
+        (ex: "exclua", "excluindo", "excluído" → todos detectados como "excluir")
 
         Args:
             texto_normalizado: Texto normalizado
@@ -72,50 +81,41 @@ class Classificador:
         Returns:
             True se houver intenção clara de integração
         """
-        # Verbos fortes que indicam ação de integração
+        # Lematiza o texto para normalizar verbos (imperativo → infinitivo)
+        texto_lematizado = lematizar_texto(texto_normalizado)
+        
+        # Extrai verbos de ação presentes no texto (já em infinitivo)
+        verbos_encontrados = extrair_verbos_de_acao(texto_normalizado)
+        
+        # Verbos de integração que buscamos (agora só infinitivos)
         verbos_integracao = {
             "enviar",
-            "envie",
             "mandar",
-            "mande",
-            "send",
             "disparar",
-            "dispare",
             "encaminhar",
-            "encaminhe",
-            "forward",
             "agendar",
-            "agende",
             "marcar",
-            "marque",
-            "schedule",
             "reservar",
-            "reserve",
             "criar",
-            "crie",
             "gerar",
-            "gere",
             "produzir",
-            "produza",
-            "create",
             "compartilhar",
-            "compartilhe",
-            "share",
-            "upload",
+            "fazer upload",
             "subir",
             "responder",
-            "reply",
             "editar",
-            "edit",
             "modificar",
-            "fazer upload",
             "fazer download",
             "sincronizar",
             "baixar",
-            "download",
             "fazer",
-            "faca",
+            "excluir",  # NOVO: agora detecta "exclua", "excluindo", etc.
+            "deletar",  # NOVO: agora detecta "delete", "deletando", etc.
+            "remover",  # NOVO: agora detecta "remova", "removendo", etc.
         }
+        
+        # Verifica se tem verbo de integração
+        tem_verbo = bool(verbos_encontrados & verbos_integracao)
 
         # Objetos ESPECÍFICOS que indicam integração real
         objetos_especificos = {
@@ -153,7 +153,7 @@ class Classificador:
 
         # Contextos que tornam objetos genéricos específicos
         # "email" vira específico se tem verbo forte + preposição/destino
-        tem_verbo = any(v in texto_normalizado for v in verbos_integracao)
+        # MELHORIA: Agora 'tem_verbo' detecta qualquer conjugação
         tem_objeto_especifico = any(
             obj in texto_normalizado for obj in objetos_especificos
         )
@@ -207,7 +207,7 @@ class Classificador:
 
         tem_arquivo_com_acao = "arquivo" in texto_normalizado and (
             tem_verbo
-            or "baixar" in texto_normalizado
+            or "baixar" in texto_lematizado  # detecta "baixe", "baixando", etc.
             or "compartilhado" in texto_normalizado
         )  # Se tem verbo + arquivo, é integração
 
@@ -218,7 +218,8 @@ class Classificador:
         )
 
         # COMPARTILHAR sempre é integração se tiver contexto de equipe/destinatário
-        tem_compartilhamento = "compartilhar" in texto_normalizado and any(
+        # MELHORIA: Agora detecta "compartilhe", "compartilhando", etc.
+        tem_compartilhamento = "compartilhar" in texto_lematizado and any(
             ctx in texto_normalizado
             for ctx in [
                 "equipe",
@@ -233,13 +234,11 @@ class Classificador:
         )
 
         # MARCAR/AGENDAR com horário é integração
+        # MELHORIA: Usa lematização - detecta qualquer conjugação
         tem_agendamento_horario = (
-            "marcar" in texto_normalizado
-            or "marque" in texto_normalizado
-            or "agendar" in texto_normalizado
-            or "agende" in texto_normalizado
-            or "reservar" in texto_normalizado
-            or "reserve" in texto_normalizado
+            "marcar" in texto_lematizado
+            or "agendar" in texto_lematizado
+            or "reservar" in texto_lematizado
         ) and any(
             ctx in texto_normalizado
             for ctx in [
