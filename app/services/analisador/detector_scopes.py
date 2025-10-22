@@ -45,7 +45,7 @@ class DetectorDeScopes:
             palavra in texto_normalizado for palavra in ["gmail", "email", "e-mail"]
         )
 
-        # Verifica se há ações específicas de calendário
+        # Detector de contexto de calendário
         acoes_calendario = [
             "agende",
             "marque",
@@ -53,6 +53,19 @@ class DetectorDeScopes:
             "adicione evento",
             "schedule",
             "book",
+            "lembre",
+            "lembrete",
+            "notifique",
+            "avise",
+            "alerta",
+            "notificacao",
+            "mostre",
+            "liste",
+            "veja",
+            "consulte",
+            "tenho",
+            "terei",
+            "ter",
         ]
         tem_acao_calendario = any(
             acao in texto_normalizado for acao in acoes_calendario
@@ -78,6 +91,15 @@ class DetectorDeScopes:
                 "sexta",
                 "sabado",
                 "domingo",
+                "manha",
+                "tarde",
+                "noite",
+                "horario",
+                "antes",
+                "depois",
+                "min",
+                "minuto",
+                "hora",
             ]
         )
 
