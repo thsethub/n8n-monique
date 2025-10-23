@@ -304,6 +304,72 @@ MAPEAMENTO_VERBOS: Dict[str, str] = {
     "reagendou": "reagendar",
     "reagendaram": "reagendar",
     
+    # MANDAR (sinônimo de enviar)
+    "mandar": "mandar",
+    "mande": "mandar",
+    "manda": "mandar",
+    "mandando": "mandar",
+    "mandado": "mandar",
+    "mandada": "mandar",
+    "mandei": "mandar",
+    "mandou": "mandar",
+    "mandaram": "mandar",
+    
+    # DISPARAR (enviar automático)
+    "disparar": "disparar",
+    "dispare": "disparar",
+    "dispara": "disparar",
+    "disparando": "disparar",
+    "disparado": "disparar",
+    "disparada": "disparar",
+    "disparei": "disparar",
+    "disparou": "disparar",
+    "dispararam": "disparar",
+    
+    # RESERVAR (agendar recursos)
+    "reservar": "reservar",
+    "reserve": "reservar",
+    "reserva": "reservar",
+    "reservando": "reservar",
+    "reservado": "reservar",
+    "reservada": "reservar",
+    "reservei": "reservar",
+    "reservou": "reservar",
+    "reservaram": "reservar",
+    
+    # PRODUZIR (criar/gerar)
+    "produzir": "produzir",
+    "produza": "produzir",
+    "produz": "produzir",
+    "produzindo": "produzir",
+    "produzido": "produzir",
+    "produzida": "produzir",
+    "produzi": "produzir",
+    "produziu": "produzir",
+    "produziram": "produzir",
+    
+    # SINCRONIZAR
+    "sincronizar": "sincronizar",
+    "sincronize": "sincronizar",
+    "sincroniza": "sincronizar",
+    "sincronizando": "sincronizar",
+    "sincronizado": "sincronizar",
+    "sincronizada": "sincronizar",
+    "sincronizei": "sincronizar",
+    "sincronizou": "sincronizar",
+    "sincronizaram": "sincronizar",
+    
+    # FAZER (genérico)
+    "fazer": "fazer",
+    "faca": "fazer",
+    "faz": "fazer",
+    "fazendo": "fazer",
+    "feito": "fazer",
+    "feita": "fazer",
+    "fiz": "fazer",
+    "fez": "fazer",
+    "fizeram": "fazer",
+    
     # GERAR
     "gerar": "gerar",
     "gere": "gerar",
@@ -461,6 +527,128 @@ MAPEAMENTO_VERBOS: Dict[str, str] = {
 
 # Conjunto de verbos infinitivos para validação rápida
 VERBOS_INFINITIVOS: Set[str] = set(MAPEAMENTO_VERBOS.values())
+
+# Adiciona sinônimos importantes que são usados como consulta
+# (mesmo que sejam mapeados para outros verbos internamente)
+VERBOS_INFINITIVOS.update([
+    "subir",           # sinônimo de "fazer upload"
+    "fazer download",  # sinônimo de "baixar"
+])
+
+
+# ============================================================================
+# DICIONÁRIOS DE CONTEXTO PARA CLASSIFICAÇÃO
+# ============================================================================
+
+# Objetos específicos que indicam integração com sistemas/APIs
+OBJETOS_INTEGRACAO: Set[str] = {
+    # Email - menções específicas
+    "gmail",
+    "destinatario",
+    "assunto",
+    # Docs - tipos específicos
+    "planilha",
+    "sheet",
+    "excel",
+    "slide",
+    "apresentacao",
+    "google docs",
+    "google drive",
+    # Calendário - contextos claros
+    "reuniao",
+    "meeting",
+    "compromisso",
+    "evento",
+    # Pagamentos
+    "boleto",
+    "pagamento",
+    "cobranca",
+    "fatura",
+    "pix",
+    # Armazenamento
+    "backup",
+    "upload",
+    "download",
+    "sincronizar",
+    # Documento/arquivos em contextos claros de sistema
+    "rascunho",
+}
+
+# Contextos que tornam "email" uma integração
+CONTEXTOS_EMAIL: Set[str] = {
+    "para", "pro", "@", "ao", "do", "da",
+    "mensagem por", "um email", "um e-mail", "uma mensagem",
+    "agora", "enviar", "automatica",
+    "maria", "joao", ".com", "teste.com",
+}
+
+# Contextos que tornam "compartilhar" uma integração
+CONTEXTOS_COMPARTILHAR: Set[str] = {
+    "equipe", "time", "com", "para",
+    "documento", "planilha", "arquivo", "drive",
+}
+
+# Contextos de agendamento/marcação
+CONTEXTOS_AGENDAMENTO: Set[str] = {
+    "call", "reuniao", "meeting", "as ", "h", "hr", ":",
+    "cliente", "urgente", "hoje", "amanha", "semana",
+    "aula", "evento", "compromisso", "para mim", "sala",
+    "segunda", "terca", "quarta", "quinta", "sexta",
+}
+
+# Contextos de cancelamento/reagendamento
+CONTEXTOS_CANCELAMENTO: Set[str] = {
+    "agendamento", "reuniao", "meeting", "compromisso", "evento",
+    "marcado", "marcada", "agendado", "agendada", "call", "aula",
+}
+
+# Exclusões - frases que NÃO são integração (mesmo com verbos/objetos)
+EXCLUSOES_INTEGRACAO: Set[str] = {
+    # Perguntas sobre funcionalidades
+    "o que vc pode fazer",
+    "o que voce pode fazer",
+    "o que pode fazer",
+    "quais funcoes",
+    "quais funcionalidades",
+    # Ajuda genérica
+    "me ajude",
+    "me ajuda",
+    " help ",
+    " ajuda ",
+    # Saudações
+    " oi ",
+    " ola ",
+    " oie ",
+    " opa ",
+    # Ações sobre conceitos (não sobre ferramentas)
+    "melhorar meu email",
+    "organizar meus documentos",
+    "organizar minhas",
+    "organizar meu",
+    # Perguntas sobre datas/tempo
+    "qual a data",
+    "que data",
+    "data de hoje",
+    "data hoje",
+    "agendar meu tempo",
+    "agendar tempo",
+    # Meta-perguntas
+    "o que fazer",
+    "como fazer",
+    "que fazer",
+    # Perguntas de aprendizado
+    "como usar",
+    "tutorial",
+    "aprender",
+    "estudar",
+    "entender sobre",
+    "dicas de",
+    "como nomear",
+    "como organizar",
+    "boas praticas",
+    "otimizar meu",
+    "configurar",
+}
 
 
 # ============================================================================
