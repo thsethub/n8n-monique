@@ -13,6 +13,7 @@ from app.utils.lematizador import (
     lematizar_texto,
     extrair_verbos_de_acao,
     tem_verbo_de_acao,
+    eh_pergunta_interrogativa,
     VERBOS_INFINITIVOS,
     OBJETOS_INTEGRACAO,
     CONTEXTOS_EMAIL,
@@ -145,6 +146,25 @@ class Classificador:
             mensagem_original, texto_normalizado
         ):
             return "messages", ["Pergunta direta/fechada detectada."]
+        
+        # Prioridade 2A: PERGUNTAS DETECTADAS POR spaCy → MESSAGES
+        # Usa análise linguística avançada para detectar perguntas (mesmo sem "?")
+        # Exemplos: "me explica como funciona", "quero saber sobre git", "pode me dizer"
+        if eh_pergunta_interrogativa(mensagem_original):
+            # Verifica se é pergunta técnica/conceitual
+            palavras_tecnicas_pergunta = [
+                "como funciona", "o que e", "como usar", "quero entender",
+                "quero aprender", "como fazer", "qual a diferenca", "me explique",
+                "entender conceito", "entender os conceito",
+                # Termos técnicos comuns
+                "git", "python", "javascript", "api", "sistema", "versionamento",
+                "programacao", "codigo", "algoritmo", "tecnologia", "framework",
+                "branch", "merge", "pull request", "commit", "database"
+            ]
+            if any(p in texto_normalizado for p in palavras_tecnicas_pergunta):
+                return "messages", ["Pergunta técnica/conceitual (spaCy)"]
+            else:
+                return "messages", ["Pergunta detectada por análise linguística"]
 
         # Prioridade 3: É uma mensagem complexa ou pessoal?
         if Classificador._e_mensagem_complexa_ou_pessoal(
@@ -353,6 +373,8 @@ class Classificador:
     def _e_mensagem_complexa_ou_pessoal(texto: str, texto_normalizado: str) -> bool:
         """
         Verifica complexidade da mensagem usando regex pré-compiladas.
+        
+        NOTA: Não usa mais verificação de tamanho - apenas features linguísticas.
 
         Args:
             texto: Texto original
@@ -362,7 +384,6 @@ class Classificador:
             True se for mensagem complexa ou pessoal
         """
 
-        e_longa = len(texto) > 100  # Reduzido de 160 para 100
         usa_referencias_pessoais = bool(REGEX_REFERENCIAS_PESSOAIS.search(texto))
         pede_um_plano_ou_estrategia = bool(REGEX_PLANO_ESTRATEGIA.search(texto))
         tem_multiplas_frases = len(REGEX_MULTIPLAS_FRASES.findall(texto)) > 1
@@ -421,8 +442,7 @@ class Classificador:
         )
 
         return (
-            e_longa
-            or usa_referencias_pessoais
+            usa_referencias_pessoais
             or pede_um_plano_ou_estrategia
             or tem_multiplas_frases
             or tem_personalizacao

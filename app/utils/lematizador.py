@@ -1032,6 +1032,101 @@ def limpar_cache() -> None:
     logger.info("🧹 Cache de lematização limpo")
 
 
+def eh_pergunta_interrogativa(texto: str) -> bool:
+    """
+    Detecta se o texto é uma pergunta usando spaCy + análise linguística.
+    
+    Detecta perguntas mesmo sem "?":
+    - "me diga como funciona" (verbo interrogativo)
+    - "quero saber sobre git" (intenção de pergunta)
+    - "voce pode explicar" (pedido de informação)
+    
+    IMPORTANTE: Não considera perguntas de natureza pessoal/desenvolvimento
+    como "gostaria de aprender programação" (isso é USER, não MESSAGES)
+    
+    Args:
+        texto: Texto a ser analisado
+        
+    Returns:
+        True se o texto é uma pergunta factual/técnica
+    """
+    texto_lower = texto.lower()
+    
+    # 0. EXCLUSÃO: Frases de natureza pessoal/desenvolvimento NÃO são perguntas técnicas
+    # "gostaria de aprender", "quero melhorar", "preciso desenvolver"
+    contextos_pessoais = [
+        "gostaria de aprender", "gostaria de melhorar", "gostaria de desenvolver",
+        "quero aprender", "quero melhorar", "quero desenvolver",
+        "preciso aprender", "preciso melhorar", "preciso desenvolver",
+        "desejo aprender", "desejo melhorar",
+        "estou tentando aprender", "estou buscando aprender"
+    ]
+    if any(ctx in texto_lower for ctx in contextos_pessoais):
+        return False
+    
+    # Perguntas explicativas detalhadas → USER (não MESSAGES)
+    # "me explique detalhadamente", "explique passo a passo", "processo de aprendizado"
+    indicadores_explicacao_complexa = [
+        "detalhadamente", "passo a passo", "em detalhes",
+        "processo de aprendizado", "processo de desenvolvimento",
+        "me ajude a entender o processo", "me explique o processo"
+    ]
+    if any(ind in texto_lower for ind in indicadores_explicacao_complexa):
+        return False
+    
+    # 1. Tem interrogação explícita?
+    if "?" in texto:
+        return True
+    
+    # 2. Começa com palavra interrogativa?
+    palavras_interrogativas_inicio = [
+        "como", "quando", "onde", "por que", "porque", "qual", "quais",
+        "quem", "quanto", "quantos", "quantas", "que", "o que"
+    ]
+    primeira_palavra = texto_lower.split()[0] if texto_lower.split() else ""
+    if primeira_palavra in palavras_interrogativas_inicio:
+        return True
+    
+    # 3. Contém estrutura interrogativa?
+    estruturas_interrogativas = [
+        "me diga", "me explique", "me fale", "me conte",
+        "quero saber", "quero entender",  # Removido "quero aprender" (muito pessoal)
+        "gostaria de saber", "preciso saber", "preciso entender",
+        "voce pode explicar", "voce consegue explicar",
+        "pode me dizer", "consegue me dizer"
+    ]
+    if any(estrutura in texto_lower for estrutura in estruturas_interrogativas):
+        return True
+    
+    # 4. Usa spaCy para análise mais profunda (se disponível)
+    if _nlp is not None:
+        try:
+            doc = _nlp(texto[:200])  # Limita para performance
+            
+            # Verifica se tem pronome interrogativo
+            for token in doc:
+                # Pronomes interrogativos: que, qual, quem, quanto, como, quando, onde
+                if token.pos_ == "PRON" and token.text.lower() in ["que", "qual", "quem", "quanto"]:
+                    return True
+                
+                # Advérbios interrogativos: como, quando, onde, por que
+                if token.pos_ == "ADV" and token.text.lower() in ["como", "quando", "onde", "porque"]:
+                    return True
+            
+            # Verifica padrão de pergunta indireta (mas factual)
+            # Ex: "gostaria de saber como funciona" (factual)
+            # NÃO: "gostaria de aprender programação" (pessoal)
+            verbos_pedido_info_factual = ["saber", "entender", "conhecer", "descobrir"]
+            for token in doc:
+                if token.lemma_ in verbos_pedido_info_factual:
+                    return True
+                    
+        except Exception:
+            pass  # Se spaCy falhar, usa apenas as regras anteriores
+    
+    return False
+
+
 def resetar_dicionario_aprendido() -> None:
     """
     Reseta o dicionário aprendido (útil para testes ou manutenção).
