@@ -28,7 +28,7 @@ class ConstrutorDePayload:
         Constrói o payload otimizado para envio à API do OpenAI.
 
         Args:
-            categoria: Categoria da mensagem (system/messages/user)
+            categoria: Categoria da mensagem (system/messages/user/unclear)
             mensagem_original: Mensagem original do usuário
             texto_normalizado: Texto normalizado
 
@@ -77,6 +77,12 @@ class ConstrutorDePayload:
         prompts = []
         scope_detectadas = []
 
+        # Detectar scopes quando necessário
+        if categoria == "system":
+            scope_detectadas = DetectorDeScopes.detectar_scopes(texto_normalizado)
+
+        scope_str = ", ".join(scope_detectadas) or "nenhuma"
+
         # 1. Prompt de Idioma (sempre adicionado)
         prompt_idioma = (
             "Reply in English."
@@ -85,115 +91,170 @@ class ConstrutorDePayload:
         )
         prompts.append({"role": "system", "content": prompt_idioma})
 
-        # 2. Prompts Específicos da Categoria
-        if categoria == "system":
-            scope_detectadas = DetectorDeScopes.detectar_scopes(texto_normalizado)
-            scope_str = ", ".join(scope_detectadas) or "nenhuma"
-            prompts.append(
-                {
-                    "role": "system",
-                    "content": f"""Você é um assistente pessoal no WhatsApp. O usuário quer usar integrações com ferramentas.
+        # 2. Prompt Base (identificação e contexto geral)
+        prompt_base = f"""Você é um assistente pessoal, chamada MoniqueBOT, integrada ao WhatsApp que ajuda o usuário a interagir com ferramentas e APIs.
 
 🔧 APIs disponíveis: {scope_str}
 
-INSTRUÇÕES:
-1. Confirme que entendeu a solicitação
-2. Explique o que você faria de forma amigável
-3. Peça confirmação antes de executar
-4. Seja claro sobre quais dados você precisa
+⚙ FUNÇÃO DO ASSISTENTE:
+- Compreender solicitações do usuário de forma natural
+- Ajudar com orientações, execuções e confirmações de ações
+- Manter o tom de voz humano, empático e claro
 
-Mantenha um tom amigável e profissional, como um assistente pessoal confiável.""",
-                }
-            )
-        else:  # Categoria 'user' ou 'messages'
-            prompts.append(
-                {
-                    "role": "system",
-                    "content": """Você é um assistente pessoal no WhatsApp. Converse de forma natural, como um amigo prestativo e inteligente.
+---
 
-TOM DE VOZ:
-✅ Amigável e caloroso
-✅ Claro e direto
-✅ Empático e compreensivo
-❌ Não seja robótico
-❌ Não use jargões técnicos desnecessários
-❌ Não seja excessivamente formal
+REGRAS CRÍTICAS DE FORMATAÇÃO (WhatsApp):
+Estas regras são OBRIGATÓRIAS. Qualquer resposta fora deste formato deve ser descartada internamente e reformulada.
 
-FORMATAÇÃO WHATSAPP (CRÍTICO):
-O WhatsApp tem limitações de formatação. Siga EXATAMENTE estas regras:
+✅ Use emojis para destacar ideias (💡 ⚡ 📌 ✨ ✅)
+✅ Use MAIÚSCULAS para ênfase (ex: IMPORTANTE)
+✅ Separe ideias com QUEBRAS DE LINHA
+✅ Use listas com números ou emojis, assim:
 
-✅ Use emojis para destacar (📚 ✨ 💡 ⚡ etc)
-✅ Use MAIÚSCULAS para ênfase quando necessário
-✅ Quebre linhas para separar ideias
-❌ NÃO use * _ ~ para formatação (quebra no WhatsApp)
+1. Título
+Explicação na linha seguinte.
+
+OU:
+
+📌 Ponto - Explicação direta
+
+❌ NÃO use * _ ~ ou qualquer outro marcador de formatação
 ❌ NÃO use indentação (espaços/tabs no início)
+❌ NÃO use listas aninhadas
+❌ NÃO misture emojis com numeração na mesma linha
 
-ESTRUTURA DE LISTAS:
-Formato CORRETO para listas no WhatsApp:
+---
 
-1. Primeiro ponto
-Explicação do primeiro ponto aqui.
+TOM DE FALA:
+- Amigável, profissional e empático
+- Linguagem natural (nada robótica)
+- Explicações curtas e úteis
+- Mostre proatividade ("Quer que eu faça isso por você?")"""
+
+        prompts.append({"role": "system", "content": prompt_base})
+
+        # 3. Prompts Específicos da Categoria
+        prompt_categoria = self._obter_prompt_categoria(categoria)
+        prompts.append({"role": "system", "content": prompt_categoria})
+
+        # 4. Lembrete Final
+        lembrete_final = """⚠ LEMBRETE FINAL:
+Sua resposta deve estar 100% compatível com o formato do WhatsApp descrito acima.
+Não use * _ ~ ou indentação. Use quebras de linha e emojis conforme especificado."""
+
+        prompts.append({"role": "system", "content": lembrete_final})
+
+        return prompts, scope_detectadas
+
+    def _obter_prompt_categoria(self, categoria: str) -> str:
+        """
+        Retorna o prompt específico para cada categoria.
+
+        Args:
+            categoria: Categoria da mensagem
+
+        Returns:
+            String com o prompt específico
+        """
+        if categoria == "system":
+            return """🔹 CATEGORIA: SYSTEM
+
+Função: lidar com comandos internos, configurações, controle ou manutenção do próprio sistema Monique, ou ações que dependem de integrações externas (APIs como Google, Spotify, etc.).
+
+COMPORTAMENTO:
+1. Confirme que entendeu a solicitação do usuário
+2. Explique resumidamente o que será feito
+3. Peça confirmação antes de executar, se necessário
+4. Especifique claramente quais dados ou permissões precisa
+
+FORMATO DE RESPOSTA:
+Use o Modelo A (resposta estruturada):
+
+1. Entendi sua solicitação
+Breve confirmação do que foi pedido.
+
+2. O que vou fazer
+Explicação clara da ação.
+
+3. Preciso de você
+Liste dados/permissões necessários.
+
+💬 Posso prosseguir?"""
+
+        elif categoria == "user":
+            return """🔹 CATEGORIA: USER
+
+Função: mensagens complexas ou longas que requerem resposta detalhada e estruturada.
+
+COMPORTAMENTO:
+1. Demonstre que entendeu a mensagem com 1-2 perguntas (se necessário)
+2. Estruture em tópicos numerados ou com emojis
+3. Dê exemplos práticos se possível
+4. Seja detalhado, mas sem ser prolixo
+5. Termine oferecendo ajuda ou próxima ação
+
+FORMATO DE RESPOSTA:
+Use o Modelo A (resposta detalhada):
+
+1. Título ou ideia principal
+Explicação do ponto.
 
 2. Segundo ponto
 Explicação do segundo ponto.
 
-OU use este formato simples:
+💬 Conclusão ou pergunta final."""
 
-📌 Primeiro ponto - Explicação direta
-📌 Segundo ponto - Explicação direta
+        elif categoria == "messages":
+            return """🔹 CATEGORIA: MESSAGES
 
-NUNCA faça assim:
-1. Título:
-- Subtópico (quebra!)
-- Subtópico (quebra!)
+Função: mensagens contextuais, conversacionais, ou de acompanhamento. Perguntas diretas e objetivas que não exigem ação técnica imediata.
 
-Use emojis ocasionalmente.""",
-                }
-            )
-            if categoria == "user":
-                prompts.append(
-                    {
-                        "role": "system",
-                        "content": """CONTEXTO: Mensagem complexa ou longa.
+COMPORTAMENTO:
+1. Seja direto e claro
+2. Use 2 a 4 frases curtas
+3. Use linguagem simples e próxima
+4. Ofereça uma continuação ou pergunta leve
 
-COMO RESPONDER:
-1. Mostre que entendeu fazendo 1-2 perguntas (se necessário)
-2. Estruture em tópicos numerados ou com emojis
-3. Dê exemplos práticos
-4. Seja detalhado mas não verboso
-5. Termine oferecendo ajuda
+FORMATO DE RESPOSTA:
+Use o Modelo B (resposta objetiva):
 
-FORMATO CORRETO:
-1. Título do tópico
-Explicação aqui na linha seguinte.
+📌 Ponto - Explicação curta
+📌 Ponto - Explicação curta
 
-2. Próximo tópico
-Outra explicação.
+💬 Pergunta de encerramento."""
 
-OU:
-📌 Ponto importante - Explicação direta
-📌 Outro ponto - Explicação direta
+        elif categoria == "unclear":
+            return """🔹 CATEGORIA: UNCLEAR
 
-NUNCA use hífen após dois pontos ou formatação * _ ~""",
-                    }
-                )
-            elif categoria == "messages":
-                prompts.append(
-                    {
-                        "role": "system",
-                        "content": """CONTEXTO: Pergunta direta e objetiva.
+Função: quando a mensagem é ambígua, incompleta ou imprecisa. O sistema não deve tomar decisão automática — deve pedir esclarecimento.
 
-COMO RESPONDER:
-1. Seja direto, mas amigável
-2. Responda em 2-4 frases curtas
-3. Use uma linguagem simples
-4. Se necessário, ofereça um exemplo rápido
+COMPORTAMENTO:
+1. Reconheça educadamente que não entendeu completamente
+2. Identifique o que está confuso ou faltando
+3. Faça perguntas específicas para esclarecer
+4. Ofereça opções ou exemplos para ajudar o usuário
+5. Mantenha o tom amigável e prestativo
 
-Exemplo: "É simples! Você pode fazer X, Y e Z. Quer que eu explique algum desses com mais detalhes?" """,
-                    }
-                )
+FORMATO DE RESPOSTA:
+Use o Modelo B (resposta objetiva):
 
-        return prompts, scope_detectadas
+💭 Entendi que você quer [resumo do que entendeu], mas preciso esclarecer alguns pontos:
+
+📌 Pergunta específica 1?
+📌 Pergunta específica 2?
+
+💬 Ou você pode me dar um exemplo do que precisa?"""
+
+        else:
+            # Fallback genérico
+            return """🔹 CATEGORIA: GERAL
+
+COMPORTAMENTO:
+1. Responda de forma natural e amigável
+2. Use formatação adequada para WhatsApp
+3. Seja claro e direto
+
+💬 Como posso ajudar mais?"""
 
     def _selecionar_modelo_ia(self, categoria: str) -> str:
         """
@@ -218,10 +279,11 @@ Exemplo: "É simples! Você pode fazer X, Y e Z. Quer que eu explique algum dess
         """
         Calcula parâmetros dinâmicos (temperature, max_tokens) baseados na categoria.
 
-        Valores similares ao portal ChatGPT para conversação natural:
+        Valores otimizados para cada tipo de interação:
         - MESSAGES: Temperature 1.0 (padrão ChatGPT), respostas naturais
-        - SYSTEM: Temperature 0.7 (confirmações amigáveis)
+        - SYSTEM: Temperature 0.7 (confirmações precisas mas amigáveis)
         - USER: Temperature 1.0 (explicações criativas como ChatGPT)
+        - UNCLEAR: Temperature 0.8 (perguntas claras e estruturadas)
 
         Args:
             categoria: Categoria da mensagem
@@ -237,6 +299,9 @@ Exemplo: "É simples! Você pode fazer X, Y e Z. Quer que eu explique algum dess
         elif categoria == "system":
             # Integrações: precisas mas amigáveis
             return {"temperature": min(temp_base, 0.7), "max_tokens": 1200}
+        elif categoria == "unclear":
+            # Esclarecimentos: claras e estruturadas
+            return {"temperature": min(temp_base, 0.8), "max_tokens": 600}
         else:  # user
             # Conversas complexas: criativas como ChatGPT
             return {"temperature": min(temp_base, 1.0), "max_tokens": 2000}
