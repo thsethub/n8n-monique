@@ -523,6 +523,61 @@ MAPEAMENTO_VERBOS: Dict[str, str] = {
     "importei": "importar",
     "importou": "importar",
     "importaram": "importar",
+    
+    # INFORMAR (novo - comandos de consulta)
+    "informar": "informar",
+    "informe": "informar",
+    "informa": "informar",
+    "informando": "informar",
+    "informado": "informar",
+    "informada": "informar",
+    "informei": "informar",
+    "informou": "informar",
+    "informaram": "informar",
+    
+    # MOSTRAR (novo - comandos de consulta)
+    "mostrar": "mostrar",
+    "mostre": "mostrar",
+    "mostra": "mostrar",
+    "mostrando": "mostrar",
+    "mostrado": "mostrar",
+    "mostrada": "mostrar",
+    "mostrei": "mostrar",
+    "mostrou": "mostrar",
+    "mostraram": "mostrar",
+    
+    # EXIBIR (novo - comandos de consulta)
+    "exibir": "exibir",
+    "exiba": "exibir",
+    "exibe": "exibir",
+    "exibindo": "exibir",
+    "exibido": "exibir",
+    "exibida": "exibir",
+    "exibi": "exibir",
+    "exibiu": "exibir",
+    "exibiram": "exibir",
+    
+    # APRESENTAR (novo - comandos de consulta)
+    "apresentar": "apresentar",
+    "apresente": "apresentar",
+    "apresenta": "apresentar",
+    "apresentando": "apresentar",
+    "apresentado": "apresentar",
+    "apresentada": "apresentar",
+    "apresentei": "apresentar",
+    "apresentou": "apresentar",
+    "apresentaram": "apresentar",
+    
+    # MARCAR (novo - agendar/marcar eventos)
+    "marcar": "marcar",
+    "marque": "marcar",
+    "marca": "marcar",
+    "marcando": "marcar",
+    "marcado": "marcar",
+    "marcada": "marcar",
+    "marquei": "marcar",
+    "marcou": "marcar",
+    "marcaram": "marcar",
 }
 
 # Conjunto de verbos infinitivos para validação rápida
@@ -544,34 +599,69 @@ VERBOS_INFINITIVOS.update([
 OBJETOS_INTEGRACAO: Set[str] = {
     # Email - menções específicas
     "gmail",
+    "outlook",
     "destinatario",
     "assunto",
+    "remetente",
     # Docs - tipos específicos
     "planilha",
+    "planilhas",
     "sheet",
+    "sheets",
     "excel",
     "slide",
+    "slides",
     "apresentacao",
+    "apresentacoes",
+    "documento",
+    "documentos",
+    "docs",
+    "doc",
     "google docs",
     "google drive",
+    "google sheets",
+    "google slides",
+    "powerpoint",
+    "word",
     # Calendário - contextos claros
     "reuniao",
+    "reunioes",
     "meeting",
+    "meetings",
     "compromisso",
+    "compromissos",
     "evento",
+    "eventos",
+    "agendamento",
+    "agendamentos",
+    "calendario",
+    "calendarios",
+    "agenda",
+    "agendas",
+    "marcacao",
+    "marcacoes",
     # Pagamentos
     "boleto",
+    "boletos",
     "pagamento",
+    "pagamentos",
     "cobranca",
+    "cobrancas",
     "fatura",
+    "faturas",
     "pix",
     # Armazenamento
     "backup",
+    "backups",
     "upload",
+    "uploads",
     "download",
+    "downloads",
     "sincronizar",
+    "sincronizacao",
     # Documento/arquivos em contextos claros de sistema
     "rascunho",
+    "rascunhos",
 }
 
 # Contextos que tornam "email" uma integração
@@ -580,26 +670,39 @@ CONTEXTOS_EMAIL: Set[str] = {
     "mensagem por", "um email", "um e-mail", "uma mensagem",
     "agora", "enviar", "automatica",
     "maria", "joao", ".com", "teste.com",
+    "destinatario", "assunto", "remetente",
 }
 
 # Contextos que tornam "compartilhar" uma integração
 CONTEXTOS_COMPARTILHAR: Set[str] = {
     "equipe", "time", "com", "para",
-    "documento", "planilha", "arquivo", "drive",
+    "documento", "documentos", "planilha", "planilhas",
+    "arquivo", "arquivos", "drive", "pasta",
+    "apresentacao", "slide", "doc",
 }
 
 # Contextos de agendamento/marcação
 CONTEXTOS_AGENDAMENTO: Set[str] = {
-    "call", "reuniao", "meeting", "as ", "h", "hr", ":",
+    "call", "reuniao", "reunioes", "meeting", "meetings",
+    "as ", "h", "hr", ":", "horas",
     "cliente", "urgente", "hoje", "amanha", "semana",
-    "aula", "evento", "compromisso", "para mim", "sala",
+    "aula", "aulas", "evento", "eventos",
+    "compromisso", "compromissos", "para mim", "sala",
     "segunda", "terca", "quarta", "quinta", "sexta",
+    "calendario", "agenda", "marcacao", "marcar",
+    "agendar", "horario", "data",
 }
 
 # Contextos de cancelamento/reagendamento
 CONTEXTOS_CANCELAMENTO: Set[str] = {
-    "agendamento", "reuniao", "meeting", "compromisso", "evento",
-    "marcado", "marcada", "agendado", "agendada", "call", "aula",
+    "agendamento", "agendamentos",
+    "reuniao", "reunioes", "meeting", "meetings",
+    "compromisso", "compromissos",
+    "evento", "eventos",
+    "marcado", "marcada", "marcados", "marcadas",
+    "agendado", "agendada", "agendados", "agendadas",
+    "call", "calls", "aula", "aulas",
+    "calendario", "agenda",
 }
 
 # Exclusões - frases que NÃO são integração (mesmo com verbos/objetos)
