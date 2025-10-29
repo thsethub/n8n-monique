@@ -191,10 +191,11 @@ class Classificador:
             
             if tem_pronome_ambiguo:
                 return "unclear", [f"Referência ambígua ('{pronome_encontrado}') sem antecedente claro"]        # Referências temporais/comparativas ambíguas
+        # IMPORTANTE: "o que você pode" é pergunta válida, não referência ambígua
         referencias_temporais_ambiguas = [
             "de antes", "da outra vez", "do outro dia", "de ontem",
             "mesmo lugar", "mesmo jeito", "o mesmo que", "igual ao",
-            "o que a gente", "o que voce", "o que eu",
+            "o que a gente fez", "o que voce fez", "o que eu fiz",  # Passado = ambíguo
             "aquele problema", "aquele erro", "aquele arquivo", "aquele documento"
         ]
         
