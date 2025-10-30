@@ -126,9 +126,10 @@ class Classificador:
             # NOTA: "me avisa" removido para não conflitar com comandos
         ]
         
-        # Se é mensagem conversacional clara, retorna MESSAGE (não UNCLEAR)
+        # Se é mensagem conversacional clara, retorna MESSAGES (não UNCLEAR)
+        # Padroniza para a categoria plural 'messages' usada pelo restante do projeto
         if any(msg in texto_normalizado for msg in mensagens_conversacionais_claras):
-            return "message", ["Mensagem conversacional (confirmação/feedback)"]
+            return "messages", ["Mensagem conversacional (confirmação/feedback)"]
         
         # Frases com "o resto", "depois que terminar" são ambíguas
         frases_resto_ambiguas = [
