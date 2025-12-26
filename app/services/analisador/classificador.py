@@ -49,7 +49,22 @@ class Classificador:
 
         Returns:
             Tupla com (categoria, lista de motivos)
+            
+        Raises:
+            ValueError: Se os parâmetros de entrada forem inválidos
         """
+        if not isinstance(mensagem_original, str):
+            raise ValueError(
+                f"mensagem_original deve ser string, recebido: {type(mensagem_original)}"
+            )
+        if not isinstance(texto_normalizado, str):
+            raise ValueError(
+                f"texto_normalizado deve ser string, recebido: {type(texto_normalizado)}"
+            )
+        
+        # Garantir que não são None ou vazios (após normalização pode ser string vazia válida)
+        mensagem_original = mensagem_original or ""
+        texto_normalizado = texto_normalizado or ""
         
         # ===================================================================
         # PRIORIDADE 0: MENSAGENS AMBÍGUAS/INCOMPLETAS → UNCLEAR
@@ -617,7 +632,18 @@ class Classificador:
         
         # Default: MESSAGES (resposta simples e direta)
         # Usado quando temos alguma confiança mas sem indicadores específicos
-        return "messages", ["Mensagem genérica - classificação por eliminação"]
+        categoria_final = "messages"
+        motivos_final = ["Mensagem genérica - classificação por eliminação"]
+        
+        categorias_validas = ["system", "messages", "user", "unclear"]
+        if categoria_final not in categorias_validas:
+            categoria_final = "unclear"
+            motivos_final = ["Erro interno na classificação - categoria inválida"]
+        
+        if not isinstance(motivos_final, list):
+            motivos_final = ["Erro interno na classificação - motivos inválidos"]
+        
+        return categoria_final, motivos_final
 
     @staticmethod
     def _tem_intencao_clara_de_integracao(texto_normalizado: str) -> bool:
@@ -637,147 +663,157 @@ class Classificador:
         Returns:
             True se houver intenção clara de integração
         """
-        # ===================================================================
-        # FILTROS DE EXCLUSÃO RÁPIDOS (verificar ANTES de tudo)
-        # ===================================================================
-        
-        # EXCLUSÃO 1: Perguntas sobre capacidade (não são comandos)
-        perguntas_capacidade = [
-            "voce pode",
-            "voce consegue",
-            "e possivel",
-            "da pra",
-            "tem como",        # NOVO: "tem como sincronizar?"
-            "existe alguma forma",
-            "como faco",
-            "como fazer",
-            "onde esta",
-            "onde fica",
-        ]
-        if any(p in texto_normalizado for p in perguntas_capacidade):
+        if not isinstance(texto_normalizado, str):
             return False
         
-        # EXCLUSÃO 2: Narrativas sobre terceiros (passado + pronome de terceira pessoa)
-        # "ele deletou", "maria enviou", "a equipe criou", "joão compartilhou"
-        pronomes_terceira_pessoa = ["ele ", "ela ", "eles ", "elas ", "alguem ", "voce viu que "]
-        nomes_proprios_comuns = ["maria ", "joao ", "jose ", "ana ", "pedro ", "paulo ", "lucas ", "carlos ", "fernando "]
-        grupos_terceira_pessoa = ["a equipe ", "o time ", "os hackers ", "a empresa ", "o grupo ", "eles ", "alguem "]
-        
-        # Verbos no passado que indicam narrativa (não comando)
-        verbos_passado_narrativa = [
-            " deletou ", " enviou ", " criou ", " compartilhou ",
-            " agendou ", " cancelou ", " removeu ", " excluiu ",
-            " baixou ", " baixaram ", " enviaram ", " criaram ",
-            " compartilharam ", " agendaram ", " cancelaram ",
-        ]
-        
-        # Se tem pronome/nome de terceira + verbo no passado = narrativa, não comando
-        eh_narrativa_terceira_pessoa = (
-            any(p in texto_normalizado for p in pronomes_terceira_pessoa + nomes_proprios_comuns + grupos_terceira_pessoa)
-            and any(v in texto_normalizado for v in verbos_passado_narrativa)
-        )
-        
-        if eh_narrativa_terceira_pessoa:
+        if not texto_normalizado:
             return False
         
-        # EXCLUSÃO 3: Frases genéricas importadas do lematizador
-        if any(exc in texto_normalizado for exc in EXCLUSOES_INTEGRACAO):
-            return False
-        
-        # ===================================================================
-        # DETECÇÃO DE INTEGRAÇÃO (após passar pelos filtros)
-        # ===================================================================
-        
-        # Lematiza o texto para normalizar verbos (imperativo → infinitivo)
-        texto_lematizado = lematizar_texto(texto_normalizado)
-        
-        # Extrai verbos de ação presentes no texto (já em infinitivo)
-        verbos_encontrados = extrair_verbos_de_acao(texto_normalizado)
-        
-        # FONTE ÚNICA: usa todos os verbos do lematizador (46 verbos, 409+ conjugações)
-        verbos_integracao = VERBOS_INFINITIVOS
-        
-        # Verifica se tem verbo de integração
-        tem_verbo = bool(verbos_encontrados & verbos_integracao)
-
-        # FONTE ÚNICA: Objetos específicos importados do lematizador
-        tem_objeto_especifico = any(
-            obj in texto_normalizado for obj in OBJETOS_INTEGRACAO
-        )
-        
-        # Objetos genéricos que se tornam específicos com verbo
-        objetos_genericos_com_verbo = [
-            "relatorio", "arquivo", "documento", "dados", "backup",
-            "nota", "texto", "mensagem", "foto", "imagem", "video",
-        ]
-        tem_objeto_generico = any(obj in texto_normalizado for obj in objetos_genericos_com_verbo)
-
-        # EMAIL com "@" ou destinatário SEMPRE é integração
-        tem_email_com_destinatario = (
-            "@" in texto_normalizado or ".com" in texto_normalizado
-        )
-
-        tem_email_com_contexto = (
-            ("email" in texto_normalizado or "e-mail" in texto_normalizado)
-            and (tem_verbo or "para" in texto_normalizado or "@" in texto_normalizado)
-            and any(p in texto_normalizado for p in CONTEXTOS_EMAIL)
-        )
-
-        tem_documento_com_acao = (
-            (
-                "documento" in texto_normalizado
-                or "doc " in texto_normalizado
-                or " doc " in texto_normalizado
-                or texto_normalizado.endswith("doc")
-                or texto_normalizado.startswith("doc ")
+        try:
+            # ===================================================================
+            # FILTROS DE EXCLUSÃO RÁPIDOS (verificar ANTES de tudo)
+            # ===================================================================
+            
+            # EXCLUSÃO 1: Perguntas sobre capacidade (não são comandos)
+            perguntas_capacidade = [
+                "voce pode",
+                "voce consegue",
+                "e possivel",
+                "da pra",
+                "tem como",        # NOVO: "tem como sincronizar?"
+                "existe alguma forma",
+                "como faco",
+                "como fazer",
+                "onde esta",
+                "onde fica",
+            ]
+            if any(p in texto_normalizado for p in perguntas_capacidade):
+                return False
+            
+            # EXCLUSÃO 2: Narrativas sobre terceiros (passado + pronome de terceira pessoa)
+            # "ele deletou", "maria enviou", "a equipe criou", "joão compartilhou"
+            pronomes_terceira_pessoa = ["ele ", "ela ", "eles ", "elas ", "alguem ", "voce viu que "]
+            nomes_proprios_comuns = ["maria ", "joao ", "jose ", "ana ", "pedro ", "paulo ", "lucas ", "carlos ", "fernando "]
+            grupos_terceira_pessoa = ["a equipe ", "o time ", "os hackers ", "a empresa ", "o grupo ", "eles ", "alguem "]
+            
+            # Verbos no passado que indicam narrativa (não comando)
+            verbos_passado_narrativa = [
+                " deletou ", " enviou ", " criou ", " compartilhou ",
+                " agendou ", " cancelou ", " removeu ", " excluiu ",
+                " baixou ", " baixaram ", " enviaram ", " criaram ",
+                " compartilharam ", " agendaram ", " cancelaram ",
+            ]
+            
+            # Se tem pronome/nome de terceira + verbo no passado = narrativa, não comando
+            eh_narrativa_terceira_pessoa = (
+                any(p in texto_normalizado for p in pronomes_terceira_pessoa + nomes_proprios_comuns + grupos_terceira_pessoa)
+                and any(v in texto_normalizado for v in verbos_passado_narrativa)
             )
-            and tem_verbo
-        )
+            
+            if eh_narrativa_terceira_pessoa:
+                return False
+            
+            # EXCLUSÃO 3: Frases genéricas importadas do lematizador
+            if any(exc in texto_normalizado for exc in EXCLUSOES_INTEGRACAO):
+                return False
+            
+            # ===================================================================
+            # DETECÇÃO DE INTEGRAÇÃO (após passar pelos filtros)
+            # ===================================================================
+            
+            # Lematiza o texto para normalizar verbos (imperativo → infinitivo)
+            texto_lematizado = lematizar_texto(texto_normalizado)
+            
+            # Extrai verbos de ação presentes no texto (já em infinitivo)
+            verbos_encontrados = extrair_verbos_de_acao(texto_normalizado)
+            
+            # FONTE ÚNICA: usa todos os verbos do lematizador (46 verbos, 409+ conjugações)
+            verbos_integracao = VERBOS_INFINITIVOS
+            
+            # Verifica se tem verbo de integração
+            tem_verbo = bool(verbos_encontrados & verbos_integracao)
 
-        tem_arquivo_com_acao = "arquivo" in texto_normalizado and (
-            tem_verbo
-            or "baixar" in texto_lematizado
-            or "compartilhado" in texto_normalizado
-        )
+            # FONTE ÚNICA: Objetos específicos importados do lematizador
+            tem_objeto_especifico = any(
+                obj in texto_normalizado for obj in OBJETOS_INTEGRACAO
+            )
+            
+            # Objetos genéricos que se tornam específicos com verbo
+            objetos_genericos_com_verbo = [
+                "relatorio", "arquivo", "documento", "dados", "backup",
+                "nota", "texto", "mensagem", "foto", "imagem", "video",
+            ]
+            tem_objeto_generico = any(obj in texto_normalizado for obj in objetos_genericos_com_verbo)
 
-        tem_calendario_com_contexto = (
-            ("agenda" in texto_normalizado or "calendar" in texto_normalizado)
-            and tem_verbo
-            and "tempo" not in texto_normalizado
-        )
+            # EMAIL com "@" ou destinatário SEMPRE é integração
+            tem_email_com_destinatario = (
+                "@" in texto_normalizado or ".com" in texto_normalizado
+            )
 
-        tem_compartilhamento = "compartilhar" in texto_lematizado and any(
-            ctx in texto_normalizado for ctx in CONTEXTOS_COMPARTILHAR
-        )
+            tem_email_com_contexto = (
+                ("email" in texto_normalizado or "e-mail" in texto_normalizado)
+                and (tem_verbo or "para" in texto_normalizado or "@" in texto_normalizado)
+                and any(p in texto_normalizado for p in CONTEXTOS_EMAIL)
+            )
 
-        tem_agendamento_horario = (
-            "marcar" in texto_lematizado
-            or "agendar" in texto_lematizado
-            or "reservar" in texto_lematizado
-        ) and any(ctx in texto_normalizado for ctx in CONTEXTOS_AGENDAMENTO)
-        
-        tem_cancelamento_ou_reagendamento = (
-            "cancelar" in texto_lematizado or "reagendar" in texto_lematizado
-        ) and any(ctx in texto_normalizado for ctx in CONTEXTOS_CANCELAMENTO)
-        
-        # Verbo de integração + objeto genérico = integração
-        # Ex: "envie o relatório", "baixe os dados"
-        tem_verbo_com_objeto_generico = tem_verbo and tem_objeto_generico
+            tem_documento_com_acao = (
+                (
+                    "documento" in texto_normalizado
+                    or "doc " in texto_normalizado
+                    or " doc " in texto_normalizado
+                    or texto_normalizado.endswith("doc")
+                    or texto_normalizado.startswith("doc ")
+                )
+                and tem_verbo
+            )
 
-        tem_integracao = (
-            tem_objeto_especifico
-            or tem_email_com_contexto
-            or tem_email_com_destinatario
-            or tem_documento_com_acao
-            or tem_arquivo_com_acao
-            or tem_calendario_com_contexto
-            or tem_compartilhamento
-            or tem_agendamento_horario
-            or tem_cancelamento_ou_reagendamento
-            or tem_verbo_com_objeto_generico  # NOVO: aceita objetos genéricos com verbo
-        )
+            tem_arquivo_com_acao = "arquivo" in texto_normalizado and (
+                tem_verbo
+                or "baixar" in texto_lematizado
+                or "compartilhado" in texto_normalizado
+            )
 
-        return tem_integracao
+            tem_calendario_com_contexto = (
+                ("agenda" in texto_normalizado or "calendar" in texto_normalizado)
+                and tem_verbo
+                and "tempo" not in texto_normalizado
+            )
+
+            tem_compartilhamento = "compartilhar" in texto_lematizado and any(
+                ctx in texto_normalizado for ctx in CONTEXTOS_COMPARTILHAR
+            )
+
+            tem_agendamento_horario = (
+                "marcar" in texto_lematizado
+                or "agendar" in texto_lematizado
+                or "reservar" in texto_lematizado
+            ) and any(ctx in texto_normalizado for ctx in CONTEXTOS_AGENDAMENTO)
+            
+            tem_cancelamento_ou_reagendamento = (
+                "cancelar" in texto_lematizado or "reagendar" in texto_lematizado
+            ) and any(ctx in texto_normalizado for ctx in CONTEXTOS_CANCELAMENTO)
+            
+            # Verbo de integração + objeto genérico = integração
+            # Ex: "envie o relatório", "baixe os dados"
+            tem_verbo_com_objeto_generico = tem_verbo and tem_objeto_generico
+
+            tem_integracao = (
+                tem_objeto_especifico
+                or tem_email_com_contexto
+                or tem_email_com_destinatario
+                or tem_documento_com_acao
+                or tem_arquivo_com_acao
+                or tem_calendario_com_contexto
+                or tem_compartilhamento
+                or tem_agendamento_horario
+                or tem_cancelamento_ou_reagendamento
+                or tem_verbo_com_objeto_generico  # NOVO: aceita objetos genéricos com verbo
+            )
+
+            return bool(tem_integracao)
+            
+        except Exception as e:
+            return False
 
     @staticmethod
     def _e_pergunta_direta_e_objetiva(texto: str, texto_normalizado: str) -> bool:
